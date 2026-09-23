@@ -7,11 +7,12 @@ import type {
   ImportRecordStatus,
   SyncHistory,
 } from "@/financial-engine/types";
+import type { Json } from "@/integrations/supabase/types";
 import { MAX_FILE_BYTES, type ImportSummary } from "@/import-engine/types";
-import type { ImportOverrides, ImportPreview } from "@/import-engine/types";
+import type { ImportComparison, ImportOverrides, ImportPreview } from "@/import-engine/types";
 import { importCutoffIssue } from "@/import-engine/cutoff";
 
-const db = supabase as any;
+const db = supabase;
 export interface ImportProgress {
   phase: string;
   done: number;
@@ -173,10 +174,12 @@ export async function analyzeFile(
     total: 0,
   });
   let request = db.rpc("compare_daily_base", {
-    p_records: parsed.records.map(({ raw, ...record }) => record),
+    p_records: parsed.records.map(({ raw, ...record }) => record) as unknown as Json,
   });
   if (signal) request = request.abortSignal(signal);
-  const { data: comparison, error } = await request;
+  const { data: comparisonData, error } = await request;
+  // El RPC devuelve jsonb: se declara la forma que espera la vista previa.
+  const comparison = comparisonData as unknown as ImportComparison | null;
   if (signal?.aborted) throw new Error("Análisis cancelado.");
   if (error) return { ...parsed, comparisonError: message(error) };
   if (!comparison?.revision || !Array.isArray(comparison.rows))
@@ -217,19 +220,20 @@ export const importService = {
     const { data, error } = await db.rpc("import_daily_base", {
       p_file_name: preview.fileName,
       p_file_hash: preview.fileHash,
-      p_records: preview.records,
+      p_records: preview.records as unknown as Json,
       p_revision: preview.comparison.revision,
       p_apply_rows: applyRows,
     });
     // Never retry through another write path: an interrupted response may already have committed.
     if (error) throw new Error(message(error));
-    if (!data?.id || !["completed", "partial", "failed"].includes(data.status))
+    const batch = data as unknown as ImportBatch | null;
+    if (!batch?.id || !["completed", "partial", "failed"].includes(batch.status))
       throw new Error(
         "No se recibió confirmación. Revisa el historial antes de volver a importar.",
       );
     onProgress?.({ phase: "Importación verificada", done: 1, total: 1 });
-    workingDate.select(data.id);
-    return toImportBatch(data);
+    workingDate.select(batch.id);
+    return batch;
   },
   async runFileImport(
     file: File,
@@ -256,9 +260,10 @@ export const importService = {
       p_batch_id: batchId,
     });
     if (error) throw new Error(deletionError(error));
-    if (!data?.revision || !Array.isArray(data.batchIds))
+    const plan = data as unknown as ExcelDeletionPlan | null;
+    if (!plan?.revision || !Array.isArray(plan.batchIds))
       throw new Error("No se pudo comprobar qué datos se eliminarán.");
-    return data;
+    return plan;
   },
   async deleteExcel(
     batchId: string | null,
@@ -271,15 +276,16 @@ export const importService = {
       p_confirmation: confirmation,
     });
     if (error) throw new Error(deletionError(error));
+    const result = data as unknown as ExcelDeletionResult | null;
     if (
-      !Array.isArray(data?.deletedBatchIds) ||
-      typeof data.remainingBatches !== "number"
+      !Array.isArray(result?.deletedBatchIds) ||
+      typeof result.remainingBatches !== "number"
     )
       throw new Error(
         "No se recibió confirmación del borrado. Actualiza el historial antes de reintentar.",
       );
-    workingDate.afterDeletion(data.deletedBatchIds);
-    return data;
+    workingDate.afterDeletion(result.deletedBatchIds);
+    return result;
   },
   async getBatchRecords(batchId: string): Promise<ImportRecord[]> {
     const result: ImportRecord[] = [];
@@ -304,11 +310,27 @@ export const importService = {
   }> {
     const { data, error } = await db.rpc("get_daily_import_status");
     if (error) throw new Error(message(error));
+    // El RPC devuelve jsonb: se declara la forma que muestra Integraciones.
+    const status = data as unknown as {
+      records: unknown;
+      last_sync_at: string | null;
+      errors: unknown;
+      history: Array<{
+        id: string;
+        source: string;
+        records: unknown;
+        status: SyncHistory["status"];
+        error_message: string | null;
+        synced_at: string;
+      }>;
+    } | null;
+    if (!status || !Array.isArray(status.history))
+      throw new Error("No se pudo leer el estado de la importación.");
     return {
-      records: Number(data.records),
-      lastSyncAt: data.last_sync_at,
-      errors: Number(data.errors),
-      history: data.history.map((r) => ({
+      records: Number(status.records),
+      lastSyncAt: status.last_sync_at,
+      errors: Number(status.errors),
+      history: status.history.map((r) => ({
         id: r.id,
         source: r.source,
         records: Number(r.records),

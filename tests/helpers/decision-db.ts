@@ -23,8 +23,10 @@ export async function decisionDb() {
   await db.exec(
     `reset role; set request.jwt.claim.sub=''; create role service_role; update profiles set role='administrador' where id='${admin}'; create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'); $$;`,
   );
+  // Solo migraciones reales: los archivos de registro del entorno (sin .sql)
+  // duplicarían sentencias y romperían la base aislada.
   for (const file of (await readdir("supabase/migrations"))
-    .filter((f) => f >= "20260917000000000")
+    .filter((f) => f.endsWith(".sql") && f >= "20260917000000000")
     .sort())
     await db.exec(await readFile("supabase/migrations/" + file, "utf8"));
   await session(db);

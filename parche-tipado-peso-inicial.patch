@@ -1,0 +1,265 @@
+diff --git a/src/services/baseTreasuryService.ts b/src/services/baseTreasuryService.ts
+index d4f0df5..c8b49c4 100644
+--- a/src/services/baseTreasuryService.ts
++++ b/src/services/baseTreasuryService.ts
+@@ -1,4 +1,4 @@
+-import { snapshotRows } from "@/financial-engine/snapshot";
++import { snapshotRows, type RawSnapshot } from "@/financial-engine/snapshot";
+ /* eslint-disable @typescript-eslint/no-explicit-any */
+ import { supabase } from "@/integrations/supabase/client";
+ import type {
+@@ -6,7 +6,7 @@ import type {
+   TreasuryRow,
+ } from "@/financial-engine/base-treasury";
+ import { workingDate } from "./workingDate";
+-const db = supabase as any;
++const db = supabase;
+ export interface DailyBatch {
+   id: string;
+   cutoff: string;
+@@ -45,17 +45,19 @@ export const baseTreasuryService = {
+         p_batch_id: selected,
+       });
+       if (error) throw explain(error);
+-      if (!data || !Array.isArray(data.rows) || !Array.isArray(data.manual))
++      // El RPC devuelve jsonb: aquí se declara la forma que consume el motor.
++      const snapshot = data as unknown as Partial<RawSnapshot> | null;
++      if (!snapshot || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.manual))
+         throw new Error("No se recibió la información diaria de BASE.");
+-      const rows = snapshotRows(data);
++      const rows = snapshotRows(snapshot as RawSnapshot);
+       return {
+         rows,
+-        links: data.links ?? [],
+-        batch: data.batch,
+-        latestId: data.latestId,
+-        cutoff: data.batch?.cutoff ?? new Date().toISOString().slice(0, 10),
++        links: snapshot.links ?? [],
++        batch: snapshot.batch ?? null,
++        latestId: snapshot.latestId ?? null,
++        cutoff: snapshot.batch?.cutoff ?? new Date().toISOString().slice(0, 10),
+         warning:
+-          data.batch?.status === "partial"
++          snapshot.batch?.status === "partial"
+             ? "Esta carga antigua quedó incompleta. Reimporta el Excel para guardar una BASE completa."
+             : "",
+       };
+diff --git a/src/services/dataService.ts b/src/services/dataService.ts
+index 88e88ff..64ba980 100644
+--- a/src/services/dataService.ts
++++ b/src/services/dataService.ts
+@@ -76,7 +76,7 @@ export interface DashboardData {
+ }
+ 
+ /** Untyped handle: the generated DB types do not include treasury tables yet. */
+-const db = supabase as any;
++const db = supabase;
+ 
+ /** Read every page; Supabase's default row limit must not truncate treasury totals. */
+ async function readRows(
+@@ -84,12 +84,11 @@ async function readRows(
+   configure?: (query: any) => any,
+ ): Promise<any[]> {
+   const rows: any[] = [];
++  // El nombre de tabla llega como variable: aquí se resuelve el constructor sin
++  // tipar a propósito. Las consultas concretas de cada módulo sí van tipadas.
++  const from = db.from.bind(db) as unknown as (name: string) => any;
+   for (let offset = 0; ; offset += 500) {
+-    let query = db
+-      .from(table)
+-      .select("*")
+-      .order("id")
+-      .range(offset, offset + 499);
++    let query = from(table).select("*").order("id").range(offset, offset + 499);
+     if (configure) query = configure(query);
+     const { data, error } = await query;
+     if (error)
+@@ -616,8 +615,11 @@ export const dataService = {
+       p_delete: remove,
+     });
+     if (error) throw new Error(error.message);
++    // save_daily_manual devuelve jsonb: se declara la forma esperada aquí.
++    const saved = data as unknown as { id: string; revision: number } | null;
++    if (!saved) throw new Error("No se pudo guardar el movimiento MANUAL.");
+     workingDate.refresh();
+-    return { ...p, id: data.id, batchId, revision: data.revision };
++    return { ...p, id: saved.id, batchId, revision: saved.revision };
+   },
+   async addProjection(p: Omit<Projection, "id">): Promise<Projection> {
+     return this.saveProjection(p);
+diff --git a/src/services/importService.ts b/src/services/importService.ts
+index 23c71bd..b8323fc 100644
+--- a/src/services/importService.ts
++++ b/src/services/importService.ts
+@@ -7,11 +7,12 @@ import type {
+   ImportRecordStatus,
+   SyncHistory,
+ } from "@/financial-engine/types";
++import type { Json } from "@/integrations/supabase/types";
+ import { MAX_FILE_BYTES, type ImportSummary } from "@/import-engine/types";
+-import type { ImportOverrides, ImportPreview } from "@/import-engine/types";
++import type { ImportComparison, ImportOverrides, ImportPreview } from "@/import-engine/types";
+ import { importCutoffIssue } from "@/import-engine/cutoff";
+ 
+-const db = supabase as any;
++const db = supabase;
+ export interface ImportProgress {
+   phase: string;
+   done: number;
+@@ -173,10 +174,12 @@ export async function analyzeFile(
+     total: 0,
+   });
+   let request = db.rpc("compare_daily_base", {
+-    p_records: parsed.records.map(({ raw, ...record }) => record),
++    p_records: parsed.records.map(({ raw, ...record }) => record) as unknown as Json,
+   });
+   if (signal) request = request.abortSignal(signal);
+-  const { data: comparison, error } = await request;
++  const { data: comparisonData, error } = await request;
++  // El RPC devuelve jsonb: se declara la forma que espera la vista previa.
++  const comparison = comparisonData as unknown as ImportComparison | null;
+   if (signal?.aborted) throw new Error("Análisis cancelado.");
+   if (error) return { ...parsed, comparisonError: message(error) };
+   if (!comparison?.revision || !Array.isArray(comparison.rows))
+@@ -217,19 +220,20 @@ export const importService = {
+     const { data, error } = await db.rpc("import_daily_base", {
+       p_file_name: preview.fileName,
+       p_file_hash: preview.fileHash,
+-      p_records: preview.records,
++      p_records: preview.records as unknown as Json,
+       p_revision: preview.comparison.revision,
+       p_apply_rows: applyRows,
+     });
+     // Never retry through another write path: an interrupted response may already have committed.
+     if (error) throw new Error(message(error));
+-    if (!data?.id || !["completed", "partial", "failed"].includes(data.status))
++    const batch = data as unknown as ImportBatch | null;
++    if (!batch?.id || !["completed", "partial", "failed"].includes(batch.status))
+       throw new Error(
+         "No se recibió confirmación. Revisa el historial antes de volver a importar.",
+       );
+     onProgress?.({ phase: "Importación verificada", done: 1, total: 1 });
+-    workingDate.select(data.id);
+-    return toImportBatch(data);
++    workingDate.select(batch.id);
++    return batch;
+   },
+   async runFileImport(
+     file: File,
+@@ -256,9 +260,10 @@ export const importService = {
+       p_batch_id: batchId,
+     });
+     if (error) throw new Error(deletionError(error));
+-    if (!data?.revision || !Array.isArray(data.batchIds))
++    const plan = data as unknown as ExcelDeletionPlan | null;
++    if (!plan?.revision || !Array.isArray(plan.batchIds))
+       throw new Error("No se pudo comprobar qué datos se eliminarán.");
+-    return data;
++    return plan;
+   },
+   async deleteExcel(
+     batchId: string | null,
+@@ -271,15 +276,16 @@ export const importService = {
+       p_confirmation: confirmation,
+     });
+     if (error) throw new Error(deletionError(error));
++    const result = data as unknown as ExcelDeletionResult | null;
+     if (
+-      !Array.isArray(data?.deletedBatchIds) ||
+-      typeof data.remainingBatches !== "number"
++      !Array.isArray(result?.deletedBatchIds) ||
++      typeof result.remainingBatches !== "number"
+     )
+       throw new Error(
+         "No se recibió confirmación del borrado. Actualiza el historial antes de reintentar.",
+       );
+-    workingDate.afterDeletion(data.deletedBatchIds);
+-    return data;
++    workingDate.afterDeletion(result.deletedBatchIds);
++    return result;
+   },
+   async getBatchRecords(batchId: string): Promise<ImportRecord[]> {
+     const result: ImportRecord[] = [];
+@@ -304,11 +310,27 @@ export const importService = {
+   }> {
+     const { data, error } = await db.rpc("get_daily_import_status");
+     if (error) throw new Error(message(error));
++    // El RPC devuelve jsonb: se declara la forma que muestra Integraciones.
++    const status = data as unknown as {
++      records: unknown;
++      last_sync_at: string | null;
++      errors: unknown;
++      history: Array<{
++        id: string;
++        source: string;
++        records: unknown;
++        status: SyncHistory["status"];
++        error_message: string | null;
++        synced_at: string;
++      }>;
++    } | null;
++    if (!status || !Array.isArray(status.history))
++      throw new Error("No se pudo leer el estado de la importación.");
+     return {
+-      records: Number(data.records),
+-      lastSyncAt: data.last_sync_at,
+-      errors: Number(data.errors),
+-      history: data.history.map((r) => ({
++      records: Number(status.records),
++      lastSyncAt: status.last_sync_at,
++      errors: Number(status.errors),
++      history: status.history.map((r) => ({
+         id: r.id,
+         source: r.source,
+         records: Number(r.records),
+diff --git a/tests/helpers/decision-db.ts b/tests/helpers/decision-db.ts
+index ee97d73..5929186 100644
+--- a/tests/helpers/decision-db.ts
++++ b/tests/helpers/decision-db.ts
+@@ -23,8 +23,10 @@ export async function decisionDb() {
+   await db.exec(
+     `reset role; set request.jwt.claim.sub=''; create role service_role; update profiles set role='administrador' where id='${admin}'; create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'); $$;`,
+   );
++  // Solo migraciones reales: los archivos de registro del entorno (sin .sql)
++  // duplicarían sentencias y romperían la base aislada.
+   for (const file of (await readdir("supabase/migrations"))
+-    .filter((f) => f >= "20260917000000000")
++    .filter((f) => f.endsWith(".sql") && f >= "20260917000000000")
+     .sort())
+     await db.exec(await readFile("supabase/migrations/" + file, "utf8"));
+   await session(db);
+diff --git a/vite.config.ts b/vite.config.ts
+index 5a68bfc..05bfd90 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -24,6 +24,29 @@ export default defineConfig(({ mode }) => {
+     base: '/',
+     build: {
+       outDir: 'dist',
++      // Solo separamos las familias que el arranque ya necesita: así el navegador
++      // las cachea por separado entre despliegues (un cambio de código deja de
++      // invalidar todo el paquete). El resto se deja a Rollup para que las
++      // librerías que solo usa una pantalla no entren al arranque.
++      rollupOptions: {
++        output: {
++          manualChunks(id: string) {
++            if (!id.includes('node_modules')) return;
++            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-runtime';
++            if (id.includes('node_modules/@supabase/')) return 'supabase-client';
++            if (id.includes('node_modules/react-router')) return 'router';
++            if (id.includes('node_modules/@radix-ui/')) return 'ui-radix';
++            if (id.includes('node_modules/lucide-react')) return 'icons';
++            if (id.includes('node_modules/@tanstack/')) return 'query';
++            return;
++          },
++        },
++      },
++      // Excel, PDF y gráficos se descargan al abrir su pantalla, no antes.
++      modulePreload: {
++        resolveDependencies: (_filename: string, deps: string[]) =>
++          deps.filter((dep) => !/(xlsx|pdf|charts|CartesianChart)-/.test(dep)),
++      },
+     }
+   };
+ });
+\ No newline at end of file

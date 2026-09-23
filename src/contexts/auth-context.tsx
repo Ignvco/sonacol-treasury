@@ -31,6 +31,22 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** Shows the real reason instead of a generic message, so a failed login is diagnosable. */
+function signInMessage(error: { message?: string; status?: number }): string {
+  const detail = (error.message ?? "").toLowerCase();
+  if (detail.includes("invalid login credentials"))
+    return "Correo o contraseña incorrectos. Revisa mayúsculas y vuelve a intentarlo.";
+  if (detail.includes("email not confirmed"))
+    return "Tu correo aún no está confirmado. Pide al administrador que active la cuenta.";
+  if (detail.includes("failed to fetch") || error.status === 0)
+    return "Sin conexión con el servidor. Revisa tu red e intenta nuevamente.";
+  if (error.status === 429 || detail.includes("too many"))
+    return "Demasiados intentos seguidos. Espera un minuto antes de reintentar.";
+  if (detail.includes("user not found"))
+    return "Ese correo no está registrado en esta instalación. Crea la cuenta.";
+  return `No se pudo iniciar sesión: ${error.message ?? "error desconocido"}.`;
+}
 async function fetchProfile(id: string): Promise<AuthUser> {
   const { data, error } = await (supabase as any)
     .from("profiles")
@@ -145,10 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
-    if (error)
-      throw new Error(
-        "No se pudo iniciar sesión. Verifica tus credenciales y la conexión.",
-      );
+    if (error) throw new Error(signInMessage(error));
     setLoading(true);
     try {
       const profile = await fetchProfile(data.user.id);

@@ -1,4 +1,4 @@
-import { snapshotRows } from "@/financial-engine/snapshot";
+import { snapshotRows, type RawSnapshot } from "@/financial-engine/snapshot";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/integrations/supabase/client";
 import type {
@@ -6,7 +6,7 @@ import type {
   TreasuryRow,
 } from "@/financial-engine/base-treasury";
 import { workingDate } from "./workingDate";
-const db = supabase as any;
+const db = supabase;
 export interface DailyBatch {
   id: string;
   cutoff: string;
@@ -45,17 +45,19 @@ export const baseTreasuryService = {
         p_batch_id: selected,
       });
       if (error) throw explain(error);
-      if (!data || !Array.isArray(data.rows) || !Array.isArray(data.manual))
+      // El RPC devuelve jsonb: aquí se declara la forma que consume el motor.
+      const snapshot = data as unknown as Partial<RawSnapshot> | null;
+      if (!snapshot || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.manual))
         throw new Error("No se recibió la información diaria de BASE.");
-      const rows = snapshotRows(data);
+      const rows = snapshotRows(snapshot as RawSnapshot);
       return {
         rows,
-        links: data.links ?? [],
-        batch: data.batch,
-        latestId: data.latestId,
-        cutoff: data.batch?.cutoff ?? new Date().toISOString().slice(0, 10),
+        links: snapshot.links ?? [],
+        batch: snapshot.batch ?? null,
+        latestId: snapshot.latestId ?? null,
+        cutoff: snapshot.batch?.cutoff ?? new Date().toISOString().slice(0, 10),
         warning:
-          data.batch?.status === "partial"
+          snapshot.batch?.status === "partial"
             ? "Esta carga antigua quedó incompleta. Reimporta el Excel para guardar una BASE completa."
             : "",
       };

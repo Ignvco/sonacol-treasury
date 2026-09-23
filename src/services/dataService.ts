@@ -76,7 +76,7 @@ export interface DashboardData {
 }
 
 /** Untyped handle: the generated DB types do not include treasury tables yet. */
-const db = supabase as any;
+const db = supabase;
 
 /** Read every page; Supabase's default row limit must not truncate treasury totals. */
 async function readRows(
@@ -84,12 +84,11 @@ async function readRows(
   configure?: (query: any) => any,
 ): Promise<any[]> {
   const rows: any[] = [];
+  // El nombre de tabla llega como variable: aquí se resuelve el constructor sin
+  // tipar a propósito. Las consultas concretas de cada módulo sí van tipadas.
+  const from = db.from.bind(db) as unknown as (name: string) => any;
   for (let offset = 0; ; offset += 500) {
-    let query = db
-      .from(table)
-      .select("*")
-      .order("id")
-      .range(offset, offset + 499);
+    let query = from(table).select("*").order("id").range(offset, offset + 499);
     if (configure) query = configure(query);
     const { data, error } = await query;
     if (error)
@@ -616,8 +615,11 @@ export const dataService = {
       p_delete: remove,
     });
     if (error) throw new Error(error.message);
+    // save_daily_manual devuelve jsonb: se declara la forma esperada aquí.
+    const saved = data as unknown as { id: string; revision: number } | null;
+    if (!saved) throw new Error("No se pudo guardar el movimiento MANUAL.");
     workingDate.refresh();
-    return { ...p, id: data.id, batchId, revision: data.revision };
+    return { ...p, id: saved.id, batchId, revision: saved.revision };
   },
   async addProjection(p: Omit<Projection, "id">): Promise<Projection> {
     return this.saveProjection(p);
