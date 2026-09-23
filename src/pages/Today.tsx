@@ -16,7 +16,7 @@ import { SectionCard } from "@/components/treasury/SectionCard";
 import { KpiCard } from "@/components/treasury/KpiCard";
 import { DecisionChart } from "@/components/treasury/DecisionChart";
 import { DecisionControls } from "@/components/treasury/DecisionControls";
-import { LoadingState, ErrorState } from "@/components/treasury/feedback";
+import { LoadingState, ErrorState, NoBaseState } from "@/components/treasury/feedback";
 import {
   SourceBreakdown,
   baseNumber,
@@ -39,7 +39,7 @@ export default function Today() {
     [detail, setDetail] = useState<TreasuryRow[] | null>(null);
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!data) return null;
+  if (!data) return <NoBaseState />;
   const { bundle, workspace, members } = data,
     { currency, horizon } = filters;
   const minimum = Number(workspace.settings.minimums[currency] ?? 0);

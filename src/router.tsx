@@ -51,11 +51,6 @@ export const routers = [
         name: "Cobranzas",
         element: <Receivables />,
       },
-      {
-        path: "payments",
-        name: "Proyecciones",
-        element: <Navigate to="/projections" replace />,
-      },
       { path: "investments", name: "Inversiones", element: <Investments /> },
       { path: "projections", name: "Proyecciones", element: <Projections /> },
       { path: "reports", name: "Reportes", element: <Reports /> },

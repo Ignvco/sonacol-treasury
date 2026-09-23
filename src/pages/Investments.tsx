@@ -8,7 +8,7 @@ import { KpiCard } from "@/components/treasury/KpiCard";
 import { DataTable } from "@/components/treasury/DataTable";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
 import { ExportMenu } from "@/components/treasury/ExportMenu";
-import { LoadingState, ErrorState, EmptyState } from "@/components/treasury/feedback";
+import { LoadingState, ErrorState, EmptyState, NoBaseState } from "@/components/treasury/feedback";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCurrency } from "@/contexts/currency-context";
 import {
@@ -55,7 +55,7 @@ export default function Investments() {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!investments || !summary || !banks) return <EmptyState />;
+  if (!investments || !summary || !banks) return <NoBaseState />;
 
   const exportRows = items.map((i) => ({
     Tipo: INVESTMENT_TYPE_LABEL[i.type],

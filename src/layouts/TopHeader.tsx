@@ -60,11 +60,11 @@ export function TopHeader() {
   return (
     <header
       data-shell-header
-      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-[#EAEAEA] bg-card/80 px-4 backdrop-blur sm:px-6 xl:px-8"
+      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-6 xl:px-8"
     >
       <div className="flex min-w-0 items-center gap-3">
         <MobileNavigation />
-        <span className="hidden text-xs text-slate-400 sm:block">
+        <span className="hidden text-xs text-muted-foreground sm:block">
           Tesorería /
         </span>
         <p className="truncate text-[15px] font-semibold tracking-tight text-foreground">

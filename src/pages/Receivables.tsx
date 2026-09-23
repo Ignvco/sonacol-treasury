@@ -8,7 +8,7 @@ import { KpiCard } from "@/components/treasury/KpiCard";
 import { DataTable } from "@/components/treasury/DataTable";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
 import { ExportMenu } from "@/components/treasury/ExportMenu";
-import { LoadingState, ErrorState, EmptyState } from "@/components/treasury/feedback";
+import { LoadingState, ErrorState, EmptyState, NoBaseState } from "@/components/treasury/feedback";
 import { useCurrency } from "@/contexts/currency-context";
 import { agingBuckets, customerName, receivablesSummary } from "@/financial-engine/calculations";
 import { INVOICE_STATUS_LABEL, type Invoice } from "@/financial-engine/types";
@@ -25,7 +25,7 @@ export default function Receivables() {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!invoices || !summary || !customers) return <EmptyState />;
+  if (!invoices || !summary || !customers) return <NoBaseState />;
 
   const nameOf = (id: string) => customerName(customers, id);
 

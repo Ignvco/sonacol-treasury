@@ -12,7 +12,7 @@ import { SectionCard } from "@/components/treasury/SectionCard";
 import { DataTable } from "@/components/treasury/DataTable";
 import { KpiCard } from "@/components/treasury/KpiCard";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
-import { LoadingState, ErrorState } from "@/components/treasury/feedback";
+import { LoadingState, ErrorState, NoBaseState } from "@/components/treasury/feedback";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
 import {
   Dialog,
@@ -70,7 +70,7 @@ export default function Projections() {
   }, [data, rates]);
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!data) return null;
+  if (!data) return <NoBaseState />;
   const { bundle, items } = data;
   const remove = async () => {
     if (!deleting || busy) return;

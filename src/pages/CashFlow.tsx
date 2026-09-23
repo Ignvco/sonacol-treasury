@@ -28,6 +28,7 @@ import {
   LoadingState,
   ErrorState,
   EmptyState,
+  NoBaseState,
 } from "@/components/treasury/feedback";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
 import { useCanWrite } from "@/contexts/auth-context";
@@ -100,7 +101,7 @@ export default function CashFlow() {
       <ErrorState message={error || banksError || "Error al cargar BASE"} />
     );
   if (loading || !banks) return <LoadingState />;
-  if (!data || !model) return <EmptyState />;
+  if (!data || !model) return <NoBaseState />;
   const exportRows = projection.map((r) => ({
     BASE: data.batch?.file_name ?? "",
     Corte: data.cutoff,

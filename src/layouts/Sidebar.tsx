@@ -73,7 +73,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
     <nav aria-label="Navegación principal" className="space-y-5 px-3 py-3">
       {GROUPS.map((group) => (
         <div key={group.label}>
-          <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
+          <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground">
             {group.label}
           </p>
           <div className="space-y-1">
@@ -87,7 +87,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                     "flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors",
                     isActive
                       ? "bg-brand text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-brand",
+                      : "text-foreground/75 hover:bg-muted hover:text-brand",
                   )
                 }
               >
@@ -103,7 +103,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 export function Sidebar() {
   return (
-    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r bg-white lg:flex">
+    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r bg-card lg:flex">
       <NavLink
         to="/dashboard"
         className="flex h-[84px] shrink-0 items-center border-b px-6"
@@ -115,12 +115,12 @@ export function Sidebar() {
       </div>
       <NavLink
         to="/settings"
-        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-3 text-[13px] text-slate-600"
+        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border bg-muted/60 px-3 py-3 text-[13px] text-foreground/75"
       >
         <Settings size={18} />
         Configuración
       </NavLink>
-      <div className="border-t px-6 py-4 text-[10px] tracking-wider text-slate-400">
+      <div className="border-t px-6 py-4 text-[10px] tracking-wider text-muted-foreground">
         SONACOL · TESORERÍA
       </div>
     </aside>

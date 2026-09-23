@@ -37,6 +37,7 @@ import {
   LoadingState,
   ErrorState,
   EmptyState,
+  NoBaseState,
 } from "@/components/treasury/feedback";
 import { ForecastLinks } from "./dashboard/ForecastLinks";
 export default function Dashboard() {
@@ -72,7 +73,7 @@ export default function Dashboard() {
     return (
       <ErrorState message={error} onRetry={() => setRefresh((x) => x + 1)} />
     );
-  if (!data || !model) return <EmptyState />;
+  if (!data || !model) return <NoBaseState />;
   const kpis = [
     {
       label: "Caja disponible",

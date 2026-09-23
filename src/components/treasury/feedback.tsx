@@ -1,4 +1,5 @@
-import { AlertTriangle, Inbox, Loader2, SearchX } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, FileUp, Inbox, Loader2, SearchX } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function LoadingState({ label = "Cargando datos…" }: { label?: string }) {
@@ -14,11 +15,13 @@ export function EmptyState({
   title = "Sin información",
   description = "No hay datos para mostrar en esta sección.",
   icon,
+  action,
   className,
 }: {
   title?: string;
   description?: string;
   icon?: React.ReactNode;
+  action?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -30,7 +33,30 @@ export function EmptyState({
       )}
       <p className="text-[14px] font-semibold text-foreground">{title}</p>
       <p className="max-w-[320px] text-[12px] leading-relaxed text-muted-foreground">{description}</p>
+      {action && <div className="mt-1.5">{action}</div>}
     </div>
+  );
+}
+
+/** Instalación sin BASE cargada: siempre ofrece la acción que la resuelve. */
+export function NoBaseState({ className }: { className?: string }) {
+  return (
+    <EmptyState
+      className={className}
+      title="Todavía no hay una BASE cargada"
+      description="Importa la BASE diaria del ERP y esta pantalla se calcula sola: saldos, proyección, cobros e inversiones."
+      icon={
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-soft text-brand-dark">
+          <FileUp className="h-5 w-5" strokeWidth={1.8} />
+        </span>
+      }
+      action={
+        <Link to="/importations" className="t-button-primary">
+          <FileUp className="h-4 w-4" strokeWidth={1.9} />
+          Importar BASE
+        </Link>
+      }
+    />
   );
 }
 

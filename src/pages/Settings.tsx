@@ -13,6 +13,7 @@ import { useAsyncData } from "@/hooks/use-async";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
+import { AccountSecurityCard } from "@/components/treasury/AccountSecurityCard";
 import { DataTable } from "@/components/treasury/DataTable";
 import { CurrencySelector } from "@/components/treasury/CurrencySelector";
 import { WorkingDate } from "@/components/treasury/WorkingDate";
@@ -40,7 +41,7 @@ const ROLES = [
   },
   {
     name: "Contabilidad",
-    scope: "Consulta de conciliación y reportes; exportación según permiso",
+    scope: "Solo lectura: conciliación y reportes; exporta según permiso",
     tone: "warning" as const,
   },
   { name: "Consulta", scope: "Solo lectura", tone: "muted" as const },
@@ -351,6 +352,8 @@ export default function Settings() {
               usuario.
             </p>
           </SectionCard>
+
+          <AccountSecurityCard />
         </div>
       </div>
 

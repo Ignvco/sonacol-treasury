@@ -1,0 +1,235 @@
+diff --git a/src/components/treasury/GlobalSearch.tsx b/src/components/treasury/GlobalSearch.tsx
+index 5a14fdf..8dec291 100644
+--- a/src/components/treasury/GlobalSearch.tsx
++++ b/src/components/treasury/GlobalSearch.tsx
+@@ -1,5 +1,5 @@
+-import { useEffect, useState } from "react";
+-import { Search } from "lucide-react";
++import { useCallback, useEffect, useRef, useState } from "react";
++import { Loader2, Search, SearchX } from "lucide-react";
+ import {
+   Dialog,
+   DialogContent,
+@@ -10,13 +10,18 @@ import {
+ import { decisionService } from "@/services/decisionService";
+ import type { TreasuryRow } from "@/financial-engine/base-treasury";
+ import { SourceBreakdown, baseNumber } from "./SourceBreakdown";
++import { cn } from "@/lib/utils";
++
+ export function GlobalSearch() {
+   const [open, setOpen] = useState(false),
+     [q, setQ] = useState(""),
+     [rows, setRows] = useState<TreasuryRow[]>([]),
+     [selected, setSelected] = useState<TreasuryRow | null>(null),
++    [active, setActive] = useState(0),
+     [error, setError] = useState(""),
+     [loading, setLoading] = useState(false);
++  const activeRef = useRef<HTMLButtonElement | null>(null);
++
+   useEffect(() => {
+     const key = (e: KeyboardEvent) => {
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+@@ -37,6 +42,7 @@ export function GlobalSearch() {
+         .then((r) => {
+           if (alive) {
+             setRows(r);
++            setActive(0);
+             setError("");
+           }
+         })
+@@ -52,6 +58,32 @@ export function GlobalSearch() {
+       clearTimeout(timer);
+     };
+   }, [q, open]);
++
++  const openRow = useCallback((row: TreasuryRow) => {
++    setOpen(false);
++    setSelected(row);
++  }, []);
++
++  // ↑ ↓ recorren los resultados y Enter abre el resaltado: la búsqueda se usa
++  // sin soltar el teclado.
++  const onInputKeyDown = (e: React.KeyboardEvent) => {
++    if (!rows.length) return;
++    if (e.key === "ArrowDown") {
++      e.preventDefault();
++      setActive((i) => (i + 1) % rows.length);
++    } else if (e.key === "ArrowUp") {
++      e.preventDefault();
++      setActive((i) => (i - 1 + rows.length) % rows.length);
++    } else if (e.key === "Enter") {
++      e.preventDefault();
++      openRow(rows[active]);
++    }
++  };
++
++  useEffect(() => {
++    activeRef.current?.scrollIntoView({ block: "nearest" });
++  }, [active, rows]);
++
+   return (
+     <>
+       <button
+@@ -78,19 +110,29 @@ export function GlobalSearch() {
+             placeholder="Cliente, documento o descripción…"
+             value={q}
+             onChange={(e) => setQ(e.target.value)}
++            onKeyDown={onInputKeyDown}
+           />
+           {loading ? (
+-            <p>Buscando…</p>
+-          ) : (
+-            <div className="grid gap-2">
+-              {rows.map((r) => (
++            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
++              <Loader2 className="h-4 w-4 animate-spin text-brand" />
++              Buscando…
++            </p>
++          ) : rows.length ? (
++            <div className="grid gap-2" role="listbox" aria-label="Resultados">
++              {rows.map((r, i) => (
+                 <button
+-                  className="rounded-xl border p-3 text-left hover:bg-brand-soft"
+                   key={r.kind + r.id}
+-                  onClick={() => {
+-                    setOpen(false);
+-                    setSelected(r);
+-                  }}
++                  ref={i === active ? activeRef : null}
++                  role="option"
++                  aria-selected={i === active}
++                  className={cn(
++                    "rounded-xl border p-3 text-left transition-colors",
++                    i === active
++                      ? "border-brand/40 bg-brand-soft"
++                      : "hover:bg-brand-soft/60",
++                  )}
++                  onMouseEnter={() => setActive(i)}
++                  onClick={() => openRow(r)}
+                 >
+                   <p className="text-sm font-medium">
+                     {r.description || r.document}
+@@ -101,12 +143,27 @@ export function GlobalSearch() {
+                   </p>
+                 </button>
+               ))}
+-              {q.length >= 2 && !rows.length && !error && (
+-                <p>Sin resultados.</p>
+-              )}
+             </div>
++          ) : (
++            <div className="flex flex-col items-center gap-2 py-6 text-center">
++              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
++                <SearchX className="h-5 w-5" strokeWidth={1.8} />
++              </span>
++              <p className="text-[13px] font-semibold text-foreground">
++                {q.length >= 2 ? "Sin resultados" : "Escribe para buscar"}
++              </p>
++              <p className="max-w-[320px] text-[12px] leading-relaxed text-muted-foreground">
++                {q.length >= 2
++                  ? "Ningún registro de la BASE activa coincide con tu búsqueda."
++                  : "Busca por cliente, documento o descripción. Usa ↑ ↓ y Enter."}
++              </p>
++            </div>
++          )}
++          {error && (
++            <p role="alert" className="text-[12px] font-medium text-danger">
++              {error}
++            </p>
+           )}
+-          {error && <p role="alert">{error}</p>}
+         </DialogContent>
+       </Dialog>
+       {selected && (
+diff --git a/src/components/treasury/NotificationPopover.tsx b/src/components/treasury/NotificationPopover.tsx
+index d5adc99..52535b4 100644
+--- a/src/components/treasury/NotificationPopover.tsx
++++ b/src/components/treasury/NotificationPopover.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from "react";
+-import { Bell, CheckCircle2 } from "lucide-react";
++import { Link } from "react-router-dom";
++import { Bell, CheckCircle2, ChevronRight } from "lucide-react";
+ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+ import { useAsyncData } from "@/hooks/use-async";
+ import { dataService } from "@/services/dataService";
+@@ -9,10 +10,11 @@ import { formatDateMedium } from "@/financial-engine/format";
+ export function NotificationPopover() {
+   const [open, setOpen] = useState(false);
+   const {data, loading, error} = useAsyncData(() => open ? dataService.getDashboard() : Promise.resolve(null),[open]);
++  // Cada alerta lleva a la pantalla donde se resuelve.
+   const alerts = data ? [
+-    ...(data.nextDeficit ? [{title:"Déficit de caja proyectado",body:`Saldo negativo previsto el ${formatDateMedium(data.nextDeficit.date)}.`}] : []),
+-    ...data.positions.filter(p=>p.difference!==0).map(p=>({title:"Conciliación por revisar",body:`${p.bank.name} presenta una diferencia entre saldos.`})),
+-    ...(data.receivables.overdue > 0 ? [{title:"Facturas vencidas",body:"Hay cuentas por cobrar vencidas. Revisa el módulo de Cobranzas."}] : []),
++    ...(data.nextDeficit ? [{title:"Déficit de caja proyectado",body:`Saldo negativo previsto el ${formatDateMedium(data.nextDeficit.date)}.`,to:"/projections"}] : []),
++    ...data.positions.filter(p=>p.difference!==0).map(p=>({title:"Conciliación por revisar",body:`${p.bank.name} presenta una diferencia entre saldos.`,to:"/reconciliation"})),
++    ...(data.receivables.overdue > 0 ? [{title:"Facturas vencidas",body:"Hay cuentas por cobrar vencidas. Revisa el módulo de Cobranzas.",to:"/receivables"}] : []),
+   ] : [];
+-  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><button aria-label="Notificaciones" className="flex h-9 w-9 items-center justify-center rounded-xl border text-muted-foreground hover:text-brand"><Bell size={17} /></button></PopoverTrigger><PopoverContent align="end" className="w-[min(340px,calc(100vw-2rem))] p-0"><div className="border-b px-4 py-3 text-sm font-semibold">Alertas de tesorería</div><div className="max-h-80 overflow-y-auto p-4">{loading ? <p className="text-sm text-muted-foreground">Consultando datos…</p> : error ? <p className="text-sm text-danger">No se pudieron consultar las alertas.</p> : alerts.length ? alerts.map((a,i)=><div key={i} className="border-b py-3 first:pt-0 last:border-0"><p className="text-sm font-medium">{a.title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{a.body}</p></div>) : <div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 size={17} className="text-success" />Sin alertas con los datos disponibles.</div>}</div></PopoverContent></Popover>;
++  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><button aria-label="Notificaciones" className="flex h-9 w-9 items-center justify-center rounded-xl border text-muted-foreground hover:text-brand"><Bell size={17} /></button></PopoverTrigger><PopoverContent align="end" className="w-[min(340px,calc(100vw-2rem))] p-0"><div className="border-b px-4 py-3 text-sm font-semibold">Alertas de tesorería</div><div className="max-h-80 overflow-y-auto p-4">{loading ? <p className="text-sm text-muted-foreground">Consultando datos…</p> : error ? <p className="text-sm text-danger">No se pudieron consultar las alertas.</p> : alerts.length ? alerts.map((a,i)=><Link key={i} to={a.to} onClick={()=>setOpen(false)} className="group flex items-start gap-2 border-b py-3 first:pt-0 last:border-0 hover:text-brand"><span className="min-w-0 flex-1"><p className="text-sm font-medium">{a.title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{a.body}</p></span><ChevronRight size={16} className="mt-0.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-brand" /></Link>) : <div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 size={17} className="text-success" />Sin alertas con los datos disponibles.</div>}</div></PopoverContent></Popover>;
+ }
+diff --git a/src/layouts/Sidebar.tsx b/src/layouts/Sidebar.tsx
+index 70e1b58..806a16e 100644
+--- a/src/layouts/Sidebar.tsx
++++ b/src/layouts/Sidebar.tsx
+@@ -73,7 +73,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+     <nav aria-label="Navegación principal" className="space-y-5 px-3 py-3">
+       {GROUPS.map((group) => (
+         <div key={group.label}>
+-          <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
++          <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground">
+             {group.label}
+           </p>
+           <div className="space-y-1">
+@@ -87,7 +87,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+                     "flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors",
+                     isActive
+                       ? "bg-brand text-white shadow-sm"
+-                      : "text-slate-600 hover:bg-slate-100 hover:text-brand",
++                      : "text-foreground/75 hover:bg-muted hover:text-brand",
+                   )
+                 }
+               >
+@@ -103,7 +103,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+ }
+ export function Sidebar() {
+   return (
+-    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r bg-white lg:flex">
++    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r bg-card lg:flex">
+       <NavLink
+         to="/dashboard"
+         className="flex h-[84px] shrink-0 items-center border-b px-6"
+@@ -115,12 +115,12 @@ export function Sidebar() {
+       </div>
+       <NavLink
+         to="/settings"
+-        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border bg-slate-50 px-3 py-3 text-[13px] text-slate-600"
++        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border bg-muted/60 px-3 py-3 text-[13px] text-foreground/75"
+       >
+         <Settings size={18} />
+         Configuración
+       </NavLink>
+-      <div className="border-t px-6 py-4 text-[10px] tracking-wider text-slate-400">
++      <div className="border-t px-6 py-4 text-[10px] tracking-wider text-muted-foreground">
+         SONACOL · TESORERÍA
+       </div>
+     </aside>
+diff --git a/src/layouts/TopHeader.tsx b/src/layouts/TopHeader.tsx
+index f84475e..33751ac 100644
+--- a/src/layouts/TopHeader.tsx
++++ b/src/layouts/TopHeader.tsx
+@@ -60,11 +60,11 @@ export function TopHeader() {
+   return (
+     <header
+       data-shell-header
+-      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-[#EAEAEA] bg-card/80 px-4 backdrop-blur sm:px-6 xl:px-8"
++      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-6 xl:px-8"
+     >
+       <div className="flex min-w-0 items-center gap-3">
+         <MobileNavigation />
+-        <span className="hidden text-xs text-slate-400 sm:block">
++        <span className="hidden text-xs text-muted-foreground sm:block">
+           Tesorería /
+         </span>
+         <p className="truncate text-[15px] font-semibold tracking-tight text-foreground">

@@ -1,7 +1,8 @@
 import { Telemetry } from "@/components/treasury/Telemetry";
 import { AccessGate } from "@/components/treasury/AccessGate";
 import { ErrorState } from "@/components/treasury/feedback";
-import { Navigate, Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TopHeader } from "./TopHeader";
@@ -11,6 +12,13 @@ import { WorkingDate } from "@/components/treasury/WorkingDate";
 /** App shell: compact sidebar + header + scrollable content. Auth-guarded. */
 export function AppLayout() {
   const { user, loading, error } = useAuth();
+  const { pathname } = useLocation();
+
+  // Al cambiar de pantalla el foco vuelve al contenido: teclado y lectores de
+  // pantalla no se quedan en el enlace del menú anterior.
+  useEffect(() => {
+    document.getElementById("main-content")?.focus();
+  }, [pathname]);
 
   if (loading) {
     return (

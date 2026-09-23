@@ -7,7 +7,7 @@ import { baseTreasury, type TreasuryRow } from "@/financial-engine/base-treasury
 import { SourceBreakdown, baseNumber } from "@/components/treasury/SourceBreakdown";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { DataTable } from "@/components/treasury/DataTable";
-import { LoadingState, ErrorState, EmptyState } from "@/components/treasury/feedback";
+import { LoadingState, ErrorState, EmptyState, NoBaseState } from "@/components/treasury/feedback";
 import { ExportMenu } from "@/components/treasury/ExportMenu";
 export default function Banks() {
  const {data,loading,error}=useAsyncData(()=>baseTreasuryService.load(),[]);
@@ -15,7 +15,7 @@ export default function Banks() {
  const [detail,setDetail]=useState<{title:string;rows:TreasuryRow[]}|null>(null);
  if(loading)return <LoadingState/>;
  if(error)return <ErrorState message={error}/>;
- if(!data)return <EmptyState/>;
+ if(!data)return <NoBaseState/>;
  const model=baseTreasury(data.rows,data.links,data.cutoff,30,filters.currency,filters.bank);
  return <div className="t-fade-in space-y-5">
   <PageHeader title="Saldos bancarios" subtitle={"Saldo contable calculado desde BASE · corte "+data.cutoff} actions={<Link to="/reconciliation" className="t-button-secondary">Conciliación con cartola</Link>}/>
