@@ -1,0 +1,16 @@
+[Unit]
+Description=Entrega completa SAP a SONACOL Treasury
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=sonacol-sync
+WorkingDirectory=/opt/sonacol-treasury
+EnvironmentFile=/etc/sonacol/sap.env
+ExecStart=/usr/bin/node scripts/sap-sync.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target

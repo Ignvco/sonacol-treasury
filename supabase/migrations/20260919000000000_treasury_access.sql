@@ -1,0 +1,84 @@
+-- Admission is enforced in PostgreSQL as well as in the application.
+begin;
+create table public.treasury_access (
+ user_id uuid primary key references public.profiles(id) on delete cascade,
+ status text not null default 'pending' check(status in ('pending','approved','revoked')),
+ can_export boolean not null default false, can_delete boolean not null default false,
+ updated_at timestamptz not null default clock_timestamp(), updated_by uuid references public.profiles(id)
+);
+insert into public.treasury_access(user_id,status,can_export,can_delete)
+select id,case when role in ('administrador','tesoreria','contabilidad') then 'approved' else 'pending' end,
+ role in ('administrador','tesoreria','contabilidad'),role='administrador' from public.profiles;
+create function public.treasury_new_access() returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin insert into public.treasury_access(user_id) values(new.id); return new; end; $$;
+create trigger treasury_profile_created after insert on public.profiles for each row execute function public.treasury_new_access();
+create function public.treasury_approved() returns boolean language sql stable security definer set search_path=public,pg_temp as $$
+ select exists(select 1 from public.treasury_access where user_id=auth.uid() and status='approved'); $$;
+create function public.treasury_require(p_write boolean default false,p_capability text default null) returns void
+language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin
+ if not public.treasury_approved() then raise exception 'Acceso pendiente o revocado. Solicita autorización al administrador.' using errcode='42501'; end if;
+ if p_write then
+  if coalesce(public.current_role(),'') not in ('administrador','tesoreria') then raise exception 'Tu rol no permite esta operación.' using errcode='42501'; end if;
+  if coalesce(auth.jwt()->>'aal','')<>'aal2' and coalesce(auth.jwt()->>'role','')<>'service_role' then raise exception 'Verifica tu segundo factor para continuar.' using errcode='42501'; end if;
+ end if;
+ if p_capability is not null and not exists(select 1 from public.treasury_access where user_id=auth.uid() and case p_capability when 'export' then can_export when 'delete' then can_delete else false end) then
+  raise exception 'No tienes permiso para %.',p_capability using errcode='42501'; end if;
+end; $$;
+alter table public.treasury_access enable row level security;
+create policy access_read on public.treasury_access for select to authenticated using(user_id=auth.uid() or (public.treasury_approved() and public.current_role()='administrador'));
+revoke all on public.treasury_access from anon,authenticated; grant select on public.treasury_access to authenticated;
+-- Restrictive policies intersect with the existing module permissions.
+do $$ declare t record; begin
+ for t in select tablename from pg_tables where schemaname='public' and tablename not in ('profiles','treasury_access') loop
+  execute format('alter table public.%I enable row level security',t.tablename);
+  execute format('create policy treasury_admission on public.%I as restrictive to authenticated using(public.treasury_approved()) with check(public.treasury_approved())',t.tablename);
+ end loop;
+end; $$;
+create policy treasury_profile_admission on public.profiles as restrictive to authenticated using(id=auth.uid() or (public.treasury_approved() and public.current_role()='administrador')) with check(public.treasury_approved());
+revoke insert,delete on public.profiles from authenticated;
+drop policy if exists audit_insert on public.audit_logs;
+revoke insert,update,delete on public.audit_logs from authenticated,anon;
+alter table public.audit_logs add column actor_id uuid references public.profiles(id);
+create function public.treasury_audit(p_action text,p_entity text,p_before jsonb default null,p_after jsonb default null) returns void
+language sql security definer set search_path=public,pg_temp as $$
+ insert into public.audit_logs(actor_id,actor,role,action,entity,previous_value,new_value)
+ select auth.uid(),coalesce(name,email,'Usuario'),public.current_role(),p_action,p_entity,p_before::text,p_after::text from public.profiles where id=auth.uid(); $$;
+create function public.treasury_access_context() returns jsonb language sql stable security definer set search_path=public,pg_temp as $$
+ select jsonb_build_object('status',status,'canExport',can_export,'canDelete',can_delete,'requiresMfa',public.current_role() in ('administrador','tesoreria')) from public.treasury_access where user_id=auth.uid(); $$;
+create function public.treasury_set_access(p_user uuid,p_status text,p_role text,p_export boolean,p_delete boolean) returns void
+language plpgsql security definer set search_path=public,pg_temp as $$
+declare previous jsonb;
+begin
+ perform public.treasury_require(true);
+ if public.current_role()<>'administrador' then raise exception 'Solo administración puede autorizar cuentas.' using errcode='42501'; end if;
+ if p_user=auth.uid() then raise exception 'Otro administrador debe cambiar tus propios permisos.'; end if;
+ if p_role not in ('administrador','tesoreria','contabilidad','consulta') or p_status not in ('pending','approved','revoked') then raise exception 'Permisos inválidos.'; end if;
+ select to_jsonb(a) into previous from public.treasury_access a where user_id=p_user for update;
+ if not found then raise exception 'Usuario inexistente.'; end if;
+ update public.profiles set role=p_role where id=p_user;
+ update public.treasury_access set status=p_status,can_export=p_export,can_delete=p_delete,updated_at=clock_timestamp(),updated_by=auth.uid() where user_id=p_user;
+ perform public.treasury_audit('Cambió acceso','Seguridad',previous,jsonb_build_object('user',p_user,'status',p_status,'role',p_role,'export',p_export,'delete',p_delete));
+end; $$;
+create function public.treasury_export_authorize(p_name text) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin perform public.treasury_require(false,'export'); perform public.treasury_audit('Exportó informe','Reportes',null,jsonb_build_object('name',left(p_name,200))); end; $$;
+-- Guard the actual entry points. Do not duplicate or relax their existing checks.
+do $$ declare f record; guard text; begin
+ for f in select p.oid,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in
+ ('import_daily_base','save_daily_manual','link_daily_forecast','delete_excel_imports','excel_deletion_plan','get_daily_base_snapshot','compare_daily_base') loop
+ guard:=case when f.proname in ('delete_excel_imports','excel_deletion_plan') then 'perform public.treasury_require(true,''delete'');'
+ when f.proname in ('get_daily_base_snapshot','compare_daily_base') then 'perform public.treasury_require(false);' else 'perform public.treasury_require(true);' end;
+ execute regexp_replace(pg_get_functiondef(f.oid),'\mbegin\M','begin '||guard,'i');
+ end loop;
+end; $$;
+create function public.treasury_guard_profile() returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin if old.role is distinct from new.role then
+ perform public.treasury_require(true);
+ if auth.uid()=old.id then raise exception 'Otro administrador debe cambiar tu rol.'; end if;
+ end if; return new; end; $$;
+create trigger treasury_profile_role before update on public.profiles for each row execute function public.treasury_guard_profile();
+revoke all on function public.treasury_new_access(),public.treasury_audit(text,text,jsonb,jsonb),public.treasury_guard_profile() from public,anon,authenticated;
+revoke all on function public.treasury_approved(),public.treasury_require(boolean,text),public.treasury_access_context(),public.treasury_set_access(uuid,text,text,boolean,boolean),public.treasury_export_authorize(text) from public,anon;
+grant execute on function public.treasury_approved(),public.treasury_require(boolean,text),public.treasury_access_context(),public.treasury_set_access(uuid,text,text,boolean,boolean),public.treasury_export_authorize(text) to authenticated;
+notify pgrst,'reload schema';
+commit;

@@ -1,0 +1,7 @@
+[Unit]
+Description=Respaldo diario SONACOL
+[Timer]
+OnCalendar=*-*-* 02:00:00 America/Santiago
+Persistent=true
+[Install]
+WantedBy=timers.target

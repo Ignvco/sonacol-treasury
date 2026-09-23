@@ -1,0 +1,7 @@
+{
+ "sources": {
+  "BANCO": {"path":"REEMPLAZAR_VISTA_BANCO","countPath":"REEMPLAZAR_VISTA_BANCO/$count","snapshotField":"SnapshotId","signedAmount":true,"fields":{"sourceId":"IdEstable","date":"Fecha","amount":"Real","currency":"Moneda","bank":"Banco","ledgerCode":"CuentaContable","document":"Documento","description":"Glosa","status":{"literal":"conciliado"}}},
+  "CLIENTES": {"path":"REEMPLAZAR_VISTA_CLIENTES","countPath":"REEMPLAZAR_VISTA_CLIENTES/$count","snapshotField":"SnapshotId","signedAmount":false,"fields":{"sourceId":"IdEstable","date":"FechaEmision","dueDate":"FechaVencimiento","amount":"SaldoPendiente","currency":"Moneda","customer":"Cliente","document":"Documento","description":"Glosa","type":{"literal":"income"},"status":{"literal":"por_vencer"}}},
+  "COLOCACIONES": {"path":"REEMPLAZAR_VISTA_COLOCACIONES","countPath":"REEMPLAZAR_VISTA_COLOCACIONES/$count","snapshotField":"SnapshotId","signedAmount":false,"fields":{"sourceId":"IdEstable","date":"FechaInicio","endDate":"FechaVencimiento","amount":"Capital","interest":"Interes","currency":"Moneda","bank":"Banco","description":"Glosa","type":{"literal":"income"},"status":{"literal":"vigente"}}}
+ }
+}

@@ -1,0 +1,82 @@
+begin;
+create table public.treasury_fx_history (
+ id uuid primary key default gen_random_uuid(), currency text not null check(currency in ('CLP','USD','UF','UTM')),
+ rate numeric not null check(rate>0 and rate<1e20), effective_date date not null, source text not null,
+ created_by uuid references public.profiles(id), created_at timestamptz not null default clock_timestamp()
+);
+create index treasury_fx_lookup on public.treasury_fx_history(currency,effective_date desc,created_at desc,id desc);
+insert into public.treasury_fx_history(currency,rate,effective_date,source)
+select currency,rate_to_clp,coalesce(updated_at::date,current_date),'Configuración previa; vigencia inicial según updated_at'
+from public.fx_rates where currency in ('CLP','USD','UF','UTM') and rate_to_clp>0;
+revoke insert,update,delete on public.fx_rates from authenticated;
+create function public.treasury_fx_rates(p_cutoff date) returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin perform public.treasury_require();
+return (select coalesce(jsonb_agg(x),'[]') from (select distinct on(currency) id,currency,rate rate_to_clp,effective_date,created_at updated_at,source
+from public.treasury_fx_history where effective_date<=p_cutoff order by currency,effective_date desc,created_at desc,id desc) x);end; $$;
+create function public.treasury_set_fx(p_currency text,p_rate numeric,p_date date,p_source text) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ perform public.treasury_require(true);
+ if public.current_role()<>'administrador' or p_currency='CLP' then raise exception 'Solo administración puede registrar tasas de moneda extranjera.';end if;
+ if p_rate is null or p_rate<=0 or p_rate>=1e20 or p_date is null then raise exception 'Tasa o fecha inválida.';end if;
+ if length(trim(coalesce(p_source,''))) not between 3 and 200 then raise exception 'Indica la fuente de la tasa.';end if;
+ insert into public.treasury_fx_history(currency,rate,effective_date,source,created_by) values(p_currency,p_rate,p_date,trim(p_source),auth.uid());
+ perform public.treasury_audit('Registró tasa histórica','Monedas',null,jsonb_build_object('currency',p_currency,'rate',p_rate,'date',p_date,'source',p_source));
+end; $$;
+create table public.treasury_operations (
+ id uuid primary key default gen_random_uuid(),source text not null check(source in ('sap','backup','restore')),run_key text not null,
+ status text not null check(status in ('running','success','error')),code text not null check(code~'^[A-Z0-9_]{1,80}$'),counts jsonb not null default '{}',
+ started_at timestamptz not null default clock_timestamp(),finished_at timestamptz,unique(source,run_key)
+);
+create table public.treasury_client_errors(id uuid primary key default gen_random_uuid(),actor uuid references public.profiles(id),code text not null,path text not null,created_at timestamptz not null default clock_timestamp());
+create table public.treasury_assistant_usage(actor uuid not null references public.profiles(id),minute timestamptz not null,count int not null,primary key(actor,minute));
+create function public.treasury_operation(p_source text,p_key text,p_status text,p_code text,p_counts jsonb default '{}') returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if length(p_key) not between 1 and 100 or octet_length(p_counts::text)>2000 then raise exception 'Registro de operación inválido.';end if;
+ insert into public.treasury_operations(source,run_key,status,code,counts,finished_at) values(p_source,p_key,p_status,p_code,p_counts,case when p_status<>'running' then clock_timestamp() end)
+ on conflict(source,run_key) do update set status=excluded.status,code=excluded.code,counts=excluded.counts,finished_at=excluded.finished_at;
+end; $$;
+create function public.treasury_health() returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin perform public.treasury_require();return jsonb_build_object('runs',coalesce((select jsonb_agg(r) from (select * from public.treasury_operations order by started_at desc limit 50) r),'[]'),
+'recentErrors',(select count(*) from public.treasury_client_errors where created_at>clock_timestamp()-interval '24 hours'));end; $$;
+create function public.treasury_report_error(p_code text,p_path text) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ perform public.treasury_require();
+ if p_code not in ('APP_RENDER','REQUEST_FAILED','UNHANDLED') or p_path !~ '^/[a-z/]*$' or length(p_path)>100 then raise exception 'Evento inválido.';end if;
+ perform pg_advisory_xact_lock(hashtext(auth.uid()::text));
+ if (select count(*) from public.treasury_client_errors where actor=auth.uid() and created_at>clock_timestamp()-interval '1 minute')<10 then
+ insert into public.treasury_client_errors(actor,code,path) values(auth.uid(),p_code,p_path);end if;
+end; $$;
+create function public.treasury_assistant_authorize() returns void language plpgsql security definer set search_path=public,pg_temp as $$
+declare used int;begin
+ perform public.treasury_require();
+ insert into public.treasury_assistant_usage(actor,minute,count) values(auth.uid(),date_trunc('minute',clock_timestamp()),1)
+ on conflict(actor,minute) do update set count=treasury_assistant_usage.count+1 returning count into used;
+ if used>20 then raise exception 'Espera un minuto antes de realizar más consultas.' using errcode='54000';end if;
+ delete from public.treasury_assistant_usage where actor=auth.uid() and minute<clock_timestamp()-interval '1 day';
+end; $$;
+create function public.treasury_audit_identity() returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin new.actor_id:=auth.uid();return new;end; $$;
+create trigger treasury_audit_actor before insert on public.audit_logs for each row execute function public.treasury_audit_identity();
+-- Trusted database owners retain the ability to bootstrap/recover administration.
+create or replace function public.treasury_guard_profile() returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin if old.role is distinct from new.role and auth.uid() is not null then perform public.treasury_require(true);
+if auth.uid()=old.id then raise exception 'Otro administrador debe cambiar tu rol.';end if;end if;return new;end; $$;
+-- Stable SAP identities use the ERP key. Excel business identity remains unchanged.
+create or replace function public.daily_prepare(p_records jsonb)
+returns table(source_row int,source_key text,entity_id uuid,entity_type text,n jsonb,raw jsonb,status text,warnings text)
+language sql immutable set search_path=public,pg_temp as $$
+with items as (select (r->>'row')::int row_num,r->>'entityType' kind,r->'normalized' n,r->'raw' raw,r->>'status' status,coalesce(r->>'warnings','') warnings,
+case when r->'normalized'->>'sourceProfile'='BASE-ONLY-SAP-v7' then md5(jsonb_build_array('SAP',r->>'entityType',r->'normalized'->>'sourceId')::text)
+else public.base_business_key(r->>'entityType',r->'normalized') end k from jsonb_array_elements(p_records) r),
+numbered as(select *,k||':'||row_number() over(partition by k order by public.base_compare_fields(n)::text,row_num) sk from items)
+select row_num,sk,md5(sk)::uuid,kind,n,coalesce(raw,'{}'),status,warnings from numbered; $$;
+do $$ declare t text; f record;begin
+ foreach t in array array['treasury_fx_history','treasury_operations','treasury_client_errors','treasury_assistant_usage'] loop
+ execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from anon,authenticated',t);
+ if t in ('treasury_fx_history','treasury_operations') then execute format('grant select on public.%I to authenticated',t);execute format('create policy approved_read on public.%I for select to authenticated using(public.treasury_approved())',t);end if;end loop;
+ for f in select p.oid::regprocedure signature,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('treasury_fx_rates','treasury_set_fx','treasury_operation','treasury_health','treasury_report_error','treasury_assistant_authorize','treasury_audit_identity') loop
+ execute format('revoke all on function %s from public,anon,authenticated',f.signature);
+ if f.proname='treasury_operation' then execute format('grant execute on function %s to service_role',f.signature);
+ elsif f.proname<>'treasury_audit_identity' then execute format('grant execute on function %s to authenticated',f.signature);end if;end loop;
+end; $$;
+notify pgrst,'reload schema';commit;

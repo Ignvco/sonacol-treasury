@@ -1,0 +1,116 @@
+begin;
+create function public.excel_deletion_plan(p_batch_id uuid default null)
+returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+declare ids uuid[]; legacy uuid[]; v_revision text; result jsonb;
+begin
+ if auth.uid() is null or coalesce(public.current_role(),'') not in ('administrador','tesoreria') then
+  raise exception 'Tu rol no permite eliminar importaciones.' using errcode='42501';
+ end if;
+ if p_batch_id is not null and not exists(select 1 from public.daily_base_batches where id=p_batch_id and source='excel') then
+  raise exception 'El Excel ya no está disponible. Actualiza el historial. No se pueden eliminar entregas SAP desde esta opción.';
+ end if;
+ select coalesce(array_agg(id order by id),'{}') into ids from public.daily_base_batches where source='excel' and (p_batch_id is null or id=p_batch_id);
+ select coalesce(array_agg(id order by id),'{}') into legacy from public.import_batches where source='excel' and (p_batch_id is null or id=p_batch_id);
+ select md5(jsonb_build_array(ids,legacy,
+  (select jsonb_agg(jsonb_build_array(id,file_hash) order by id) from public.daily_base_batches),
+  (select jsonb_agg(jsonb_build_array(batch_id,id,revision,deleted,source_record_id) order by batch_id,id) from public.daily_manual),
+  (select jsonb_agg(jsonb_build_array(id,batch_id,projection_id,target_kind,target_id) order by id) from public.daily_forecast_links),
+  (select jsonb_agg(jsonb_build_array(id,entity_type,entity_id,status) order by id) from public.import_records where import_batch_id=any(legacy)),
+  (select jsonb_agg(id order by id) from public.cash_flow c where p_batch_id is null and origin='excel' and not exists(select 1 from public.import_records r where r.entity_type='cash_flow' and r.entity_id=c.id))
+ )::text) into v_revision;
+ select jsonb_build_object('revision',v_revision,'batchIds',to_jsonb(ids),'legacyIds',to_jsonb(legacy),
+  'files',(select count(*) from (select unnest(ids) union select unnest(legacy)) x),
+  'legacyFiles',cardinality(legacy),'rows',(select count(*) from public.daily_base_rows where batch_id=any(ids)),
+  'legacyRows',(select count(*) from public.import_records where import_batch_id=any(legacy)),
+  'legacyOrphans',(select count(*) from public.cash_flow c where p_batch_id is null and origin='excel' and not exists(select 1 from public.import_records r where r.entity_type='cash_flow' and r.entity_id=c.id)),
+  'manual',(select count(*) from public.daily_manual where batch_id=any(ids) and not deleted),
+  'editedManual',(select count(*) from public.daily_manual where batch_id=any(ids) and edited and not deleted),
+  'carriedManual',(select count(*) from public.daily_manual m join public.daily_base_rows r on r.id=m.source_record_id where r.batch_id=any(ids) and not(m.batch_id=any(ids))),
+  'latestAfter',(select jsonb_build_object('id',id,'fileName',file_name,'cutoff',cutoff,'source',source) from public.daily_base_batches where not(id=any(ids)) order by cutoff desc,created_at desc,id desc limit 1)
+ ) into result;
+ return result;
+end; $$;
+
+create function public.delete_excel_imports(p_batch_id uuid,p_revision text,p_confirmation text)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp set statement_timeout='55s' as $$
+declare plan jsonb; ids uuid[]; legacy uuid[]; actor text; account_row record; remaining jsonb;
+begin
+ if auth.uid() is null or coalesce(public.current_role(),'') not in ('administrador','tesoreria') then
+  raise exception 'Tu rol no permite eliminar importaciones.' using errcode='42501';
+ end if;
+ if trim(coalesce(p_confirmation,'')) <> (case when p_batch_id is null then 'VACIAR EXCEL' else 'ELIMINAR' end) then
+  raise exception 'Escribe la confirmación indicada antes de eliminar.';
+ end if;
+ perform pg_advisory_xact_lock(728394107);
+ plan:=public.excel_deletion_plan(p_batch_id);
+ if plan->>'revision' is distinct from p_revision then raise exception 'Los datos cambiaron. Revisa nuevamente el alcance antes de eliminar.'; end if;
+ select coalesce(array_agg(value::uuid),'{}') into ids from jsonb_array_elements_text(plan->'batchIds');
+ select coalesce(array_agg(value::uuid),'{}') into legacy from jsonb_array_elements_text(plan->'legacyIds');
+
+ update public.daily_manual m set source_record_id=null,revision=m.revision+1,
+  normalized_json=m.normalized_json||jsonb_build_object('removedSourceFile',b.file_name,'removedSourceRow',r.source_row),
+  updated_at=clock_timestamp()
+ from public.daily_base_rows r join public.daily_base_batches b on b.id=r.batch_id
+ where m.source_record_id=r.id and r.batch_id=any(ids) and not(m.batch_id=any(ids));
+ delete from public.daily_forecast_links where batch_id=any(ids);
+ delete from public.daily_manual where batch_id=any(ids);
+ delete from public.daily_base_rows where batch_id=any(ids);
+ delete from public.daily_base_batches where id=any(ids);
+
+ update public.import_records keep set entity_id=original.entity_id
+ from (
+  select entity_type,normalized_json,min(entity_id::text)::uuid entity_id from public.import_records
+  where import_batch_id=any(legacy) and entity_id is not null and normalized_json is not null
+   and status in ('VALID','WARNING','DUPLICATE')
+  group by entity_type,normalized_json having count(distinct entity_id)=1
+ ) original
+ where not(keep.import_batch_id=any(legacy)) and keep.entity_id is null and keep.status='DUPLICATE'
+  and keep.entity_type=original.entity_type and keep.normalized_json=original.normalized_json;
+ delete from public.forecast_links l where
+  exists(select 1 from public.import_records r where r.import_batch_id=any(legacy)
+   and ((r.entity_type='projection' and r.entity_id=l.projection_id) or (r.entity_type=l.target_kind and r.entity_id=l.target_id))
+   and not exists(select 1 from public.import_records keep where not(keep.import_batch_id=any(legacy)) and keep.entity_type=r.entity_type and keep.entity_id=r.entity_id));
+ delete from public.cash_flow c where
+  (exists(select 1 from public.import_records r where r.import_batch_id=any(legacy) and ((r.entity_type='cash_flow' and r.entity_id=c.id) or r.id=c.import_record_id))
+   or (p_batch_id is null and c.origin='excel'))
+  and not exists(select 1 from public.import_records keep where not(keep.import_batch_id=any(legacy)) and keep.entity_type='cash_flow' and keep.entity_id=c.id);
+ delete from public.invoices e where exists(select 1 from public.import_records r where r.import_batch_id=any(legacy) and r.entity_type='invoice' and r.entity_id=e.id)
+  and not exists(select 1 from public.import_records keep where not(keep.import_batch_id=any(legacy)) and keep.entity_type='invoice' and keep.entity_id=e.id);
+ delete from public.investments e where exists(select 1 from public.import_records r where r.import_batch_id=any(legacy) and r.entity_type='investment' and r.entity_id=e.id)
+  and not exists(select 1 from public.import_records keep where not(keep.import_batch_id=any(legacy)) and keep.entity_type='investment' and keep.entity_id=e.id);
+ delete from public.projections e where exists(select 1 from public.import_records r where r.import_batch_id=any(legacy) and r.entity_type='projection' and r.entity_id=e.id)
+  and not exists(select 1 from public.import_records keep where not(keep.import_batch_id=any(legacy)) and keep.entity_type='projection' and keep.entity_id=e.id);
+
+ for account_row in
+  select distinct on(a.id) a.id,r.normalized_json n from public.bank_accounts a join public.import_records r on r.entity_id=a.id
+  where r.import_batch_id=any(legacy) and r.entity_type='bank_account' and r.status in ('VALID','WARNING','DUPLICATE')
+   and a.balance_date=(r.normalized_json->>'date')::date and a.balance=(r.normalized_json->>'balance')::numeric
+   and a.reconciled_balance=(r.normalized_json->>'reconciledBalance')::numeric
+  order by a.id,r.created_at desc,r.id desc
+ loop
+  select r.normalized_json into remaining from public.import_records r
+   where not(r.import_batch_id=any(legacy)) and r.entity_type='bank_account' and r.entity_id=account_row.id and r.status in ('VALID','WARNING','DUPLICATE')
+   order by (r.normalized_json->>'date')::date desc,r.created_at desc,r.id desc limit 1;
+  update public.bank_accounts set balance=coalesce((remaining->>'balance')::numeric,0),reconciled_balance=coalesce((remaining->>'reconciledBalance')::numeric,0),
+   balance_date=(remaining->>'date')::date,last_reconciliation=(remaining->>'date')::date where id=account_row.id;
+ end loop;
+ delete from public.sync_history where import_batch_id=any(legacy) or (p_batch_id is null and source='excel');
+ delete from public.import_records where import_batch_id=any(legacy);
+ delete from public.import_batches where id=any(legacy);
+ update public.sync_sources set records_synced=coalesce((select total_records from public.daily_base_batches where source='excel' order by cutoff desc,created_at desc,id desc limit 1),0),
+  last_sync_at=(select created_at from public.daily_base_batches where source='excel' order by cutoff desc,created_at desc,id desc limit 1),errors=0 where source='excel';
+ select coalesce(name,email,'Usuario') into actor from public.profiles where id=auth.uid();
+ insert into public.audit_logs(actor,role,action,entity,previous_value,new_value)
+ values(actor,public.current_role(),case when p_batch_id is null then 'Vació importaciones Excel' else 'Eliminó importación Excel' end,'Importaciones',
+  jsonb_build_object('batchIds',ids,'legacyIds',legacy,'files',plan->'files','rows',plan->'rows','manual',plan->'manual')::text,
+  jsonb_build_object('latestId',public.daily_latest())::text);
+ return jsonb_build_object('deletedBatchIds',ids,'deletedFiles',plan->'files','deletedRows',plan->'rows','deletedManual',plan->'manual',
+  'latestId',public.daily_latest(),'remainingBatches',(select count(*) from public.daily_base_batches));
+end; $$;
+
+revoke all on function public.excel_deletion_plan(uuid) from public,anon;
+revoke all on function public.delete_excel_imports(uuid,text,text) from public,anon;
+grant execute on function public.excel_deletion_plan(uuid) to authenticated;
+grant execute on function public.delete_excel_imports(uuid,text,text) to authenticated;
+notify pgrst, 'reload schema';
+commit;

@@ -1,0 +1,314 @@
+-- Immutable daily ERP snapshots and a separate MANUAL workspace per snapshot.
+-- Additive migration: previous entities/import history are never deleted.
+create table public.daily_base_batches (
+ id uuid primary key default gen_random_uuid(), file_name text not null,
+ file_hash text unique not null, cutoff date not null, source text not null default 'excel' check(source in ('excel','sap')),
+ uploaded_by text not null, uploaded_by_id uuid references auth.users(id),
+ status text not null default 'completed', total_records int not null default 0,
+ valid_records int not null default 0, warning_records int not null default 0,
+ error_records int not null default 0, duplicate_records int not null default 0,
+ imported_records int not null default 0, created_at timestamptz not null default clock_timestamp()
+);
+create index daily_base_latest on public.daily_base_batches(cutoff desc,created_at desc,id);
+create table public.daily_base_rows (
+ id uuid primary key default gen_random_uuid(), batch_id uuid not null references public.daily_base_batches(id),
+ source_row int not null, source_key text not null, entity_id uuid not null,
+ entity_type text not null check(entity_type in ('cash_flow','invoice','investment','projection')),
+ normalized_json jsonb not null, raw_json jsonb not null, status text not null, warnings text not null default '',
+ unique(batch_id,source_row), unique(batch_id,source_key)
+);
+create index daily_base_rows_entity on public.daily_base_rows(batch_id,entity_id);
+create table public.daily_manual (
+ batch_id uuid not null references public.daily_base_batches(id), id uuid not null default gen_random_uuid(),
+ source_key text, normalized_json jsonb not null, source_record_id uuid references public.daily_base_rows(id),
+ edited boolean not null default false, deleted boolean not null default false,
+ revision int not null default 1, updated_at timestamptz not null default clock_timestamp(),
+ updated_by uuid references auth.users(id), primary key(batch_id,id), unique(batch_id,source_key)
+);
+create table public.daily_forecast_links (
+ id uuid primary key default gen_random_uuid(), batch_id uuid not null references public.daily_base_batches(id),
+ projection_id uuid not null, target_kind text not null check(target_kind in ('invoice','investment')),
+ target_id uuid not null, foreign key(batch_id,projection_id) references public.daily_manual(batch_id,id),
+ unique(batch_id,projection_id), unique(batch_id,target_kind,target_id)
+);
+alter table public.daily_base_batches enable row level security;
+alter table public.daily_base_rows enable row level security;
+alter table public.daily_manual enable row level security;
+alter table public.daily_forecast_links enable row level security;
+create policy daily_batches_read on public.daily_base_batches for select to authenticated using(true);
+create policy daily_rows_read on public.daily_base_rows for select to authenticated using(true);
+create policy daily_manual_read on public.daily_manual for select to authenticated using(true);
+create policy daily_links_read on public.daily_forecast_links for select to authenticated using(true);
+revoke all on public.daily_base_batches,public.daily_base_rows,public.daily_manual,public.daily_forecast_links from anon,authenticated;
+grant select on public.daily_base_batches,public.daily_base_rows,public.daily_manual,public.daily_forecast_links to authenticated;
+
+-- Row numbers are trace coordinates, never business identities. Exact duplicates
+-- retain their multiplicity. ERP identities are only used for comparing snapshots.
+create function public.daily_prepare(p_records jsonb)
+returns table(source_row int,source_key text,entity_id uuid,entity_type text,n jsonb,raw jsonb,status text,warnings text)
+language sql immutable set search_path=public,pg_temp as $$
+ with items as (
+  select (r->>'row')::int row_num,r->>'entityType' kind,r->'normalized' n,r->'raw' raw,r->>'status' status,coalesce(r->>'warnings','') warnings,
+   public.base_business_key(r->>'entityType',r->'normalized') k
+  from jsonb_array_elements(p_records) r
+ ), numbered as (
+  select *,k||':'||row_number() over(partition by k order by public.base_compare_fields(n)::text,row_num) sk from items
+ ) select row_num,sk,md5(sk)::uuid,kind,n,coalesce(raw,'{}'),status,warnings from numbered;
+$$;
+
+create function public.daily_latest() returns uuid language sql stable set search_path=public,pg_temp as $$
+ select id from public.daily_base_batches order by cutoff desc,created_at desc,id desc limit 1;
+$$;
+
+create function public.daily_validate(p_records jsonb) returns date
+language plpgsql immutable set search_path=public,pg_temp as $$
+declare r jsonb; n jsonb; d date; cutoff date; expected text;
+begin
+ if jsonb_typeof(p_records) is distinct from 'array' then raise exception 'BASE debe contener una lista de filas.'; end if;
+ if jsonb_array_length(p_records) not between 1 and 20000 or octet_length(p_records::text)>25000000 then
+  raise exception 'BASE debe contener entre 1 y 20.000 filas y hasta 25 MB de datos.'; end if;
+ if exists(select 1 from jsonb_array_elements(p_records) x group by x->>'row' having count(*)>1) then raise exception 'BASE contiene números de fila repetidos.'; end if;
+ for r in select value from jsonb_array_elements(p_records) loop
+  n:=r->'normalized';
+  expected:=case n->>'sourceOrigin' when 'BANCO' then 'cash_flow' when 'CLIENTES' then 'invoice' when 'COLOCACIONES' then 'investment' when 'MANUAL' then 'projection' end;
+  if upper(trim(r->>'sheet')) is distinct from 'BASE' or expected is null or r->>'entityType' is distinct from expected
+   or coalesce(r->>'status','') not in ('VALID','WARNING') or coalesce(n->>'sourceProfile','') not like 'BASE-ONLY-%'
+   or coalesce(r->>'row','') !~ '^[1-9][0-9]*$' or jsonb_typeof(n) is distinct from 'object' then
+   raise exception 'Fila BASE % inválida. Corrige los errores antes de guardar; no se cambió la fecha activa.',r->>'row'; end if;
+  if coalesce(n->>'currency','') not in ('CLP','USD','UF','UTM') or coalesce(n->>'type','') not in ('income','expense')
+   or coalesce(n->>'amount','') !~ '^[0-9]+([.][0-9]+)?$' or (n->>'amount')::numeric<=0 then raise exception 'Importe, moneda o tipo inválido en BASE %.',r->>'row'; end if;
+  d:=coalesce(nullif(n->>'date',''),nullif(n->>'issueDate',''),nullif(n->>'startDate',''))::date;
+  if d is null then raise exception 'Falta fecha en BASE %.',r->>'row'; end if;
+  perform nullif(n->>'dueDate','')::date,nullif(n->>'endDate','')::date,nullif(n->>'reportDate','')::date,nullif(n->>'adjustedDate','')::date;
+  if nullif(n->>'cutoffDate','') is not null then
+   d:=(n->>'cutoffDate')::date;
+   if cutoff is not null and cutoff<>d then raise exception 'BASE contiene fechas de corte distintas.'; end if;
+   cutoff:=d;
+  end if;
+ end loop;
+ if cutoff is null then
+  select max((item.value->'normalized'->>'date')::date) into cutoff from jsonb_array_elements(p_records) as item(value) where item.value->'normalized'->>'sourceOrigin'='BANCO';
+ end if;
+ if cutoff is null then raise exception 'BASE no tiene una fecha de corte ni movimientos BANCO fechados.'; end if;
+ return cutoff;
+end; $$;
+
+-- One revision covers the active snapshot and edits in its MANUAL workspace.
+-- It does not hash raw cells; comparison requests need only normalized fields.
+create function public.daily_revision(p_records jsonb) returns text
+language sql stable set search_path=public,pg_temp as $$
+ select md5(coalesce(public.daily_latest()::text,'')||
+  coalesce((select string_agg(id::text||':'||revision::text,',' order by id) from public.daily_manual where batch_id=public.daily_latest()),'')||
+  coalesce((select string_agg(jsonb_build_array(r->'row',r->'entityType',r->'normalized',r->'status')::text,',' order by (r->>'row')::int) from jsonb_array_elements(p_records) r),'')
+ );
+$$;
+
+create function public.daily_ambiguous_manual(p_records jsonb,p_batch_id uuid) returns text[]
+language sql stable set search_path=public,pg_temp as $$
+ with old_groups as(select split_part(source_key,':',1) k,count(*) n,bool_or(edited) edited from public.daily_manual
+  where batch_id=p_batch_id and source_key is not null group by 1), incoming as(
+  select public.base_business_key('projection',r->'normalized') k,count(*) n from jsonb_array_elements(p_records) r where r->>'entityType'='projection' group by 1)
+ select coalesce(array_agg(o.k),'{}') from old_groups o left join incoming i using(k) where o.edited and greatest(o.n,coalesce(i.n,0))>1;
+$$;
+
+create function public.compare_daily_base(p_records jsonb) returns jsonb
+language plpgsql stable security invoker set search_path=public,pg_temp as $$
+declare latest uuid:=public.daily_latest(); cutoff date; rows jsonb; removed int; ambiguous text[];
+begin
+ if auth.uid() is null then raise exception 'Inicia sesión.' using errcode='42501'; end if;
+ -- Invalid parser rows stay visible in the preview, but the atomic commit rejects them.
+ if jsonb_typeof(p_records) is distinct from 'array' or jsonb_array_length(p_records)>20000 then raise exception 'Registros inválidos.'; end if;
+ select max(nullif(r->'normalized'->>'cutoffDate','')::date) into cutoff from jsonb_array_elements(p_records) r;
+ ambiguous:=public.daily_ambiguous_manual(p_records,latest);
+ with incoming as materialized(select * from public.daily_prepare(p_records)), previous as (
+  select r.source_key,r.normalized_json n,false edited,false deleted from public.daily_base_rows r where r.batch_id=latest and r.entity_type<>'projection'
+  union all select source_key,normalized_json,edited,deleted from public.daily_manual where batch_id=latest
+ ), compared as (
+  select i.*,p.n old_n,p.edited,p.deleted,
+   case when i.status not in ('VALID','WARNING') then 'invalid'
+    when i.entity_type='projection' and split_part(i.source_key,':',1)=any(ambiguous) then 'conflict' when p.n is null then 'new'
+    when public.base_compare_fields(i.n)=public.base_compare_fields(p.n) and not p.deleted then 'unchanged' else 'modified' end decision
+  from incoming i left join previous p using(source_key)
+ ) select coalesce(jsonb_agg(jsonb_build_object('row',source_row,'change',decision,'entityId',entity_id,
+  'before',public.base_compare_fields(old_n),'after',public.base_compare_fields(n),'manualEdited',coalesce(edited,false),
+  'reason',case when decision='conflict' then 'Varias filas MANUAL comparten identidad y existen ediciones. Se conserva el grupo completo de la plataforma; revísalo en Proyecciones. ERP se actualizará normalmente.'
+   when deleted then 'Eliminado en MANUAL. Solo se restaurará si seleccionas este cambio.'
+   when edited and decision='modified' then 'Modificado en la plataforma. Conservamos tu edición salvo que selecciones el cambio del Excel.'
+   when entity_type<>'projection' then 'ERP: se actualizará con esta BASE completa; solo lectura en la plataforma.' else null end) order by source_row),'[]') into rows from compared;
+ with incoming as(select source_key from public.daily_prepare(p_records))
+ select count(*) into removed from public.daily_base_rows r where r.batch_id=latest and r.entity_type<>'projection' and not exists(select 1 from incoming i where i.source_key=r.source_key);
+ return jsonb_build_object('revision',public.daily_revision(p_records),'rows',rows,'cutoff',cutoff,'removed',removed,
+  'historical',coalesce(cutoff<(select b.cutoff from public.daily_base_batches b where b.id=latest),false));
+end; $$;
+
+create function public.import_daily_base(p_file_name text,p_file_hash text,p_records jsonb,p_revision text,p_apply_rows int[])
+returns jsonb language plpgsql security definer set search_path=public,pg_temp set statement_timeout='55s' as $$
+declare b public.daily_base_batches%rowtype; previous uuid; day date; forward boolean; actor text; ambiguous text[];
+begin
+ if auth.uid() is null or coalesce(public.current_role(),'') not in ('administrador','tesoreria') then raise exception 'Tu rol no permite importar archivos.' using errcode='42501'; end if;
+ if p_file_name is null or length(trim(p_file_name)) not between 1 and 255 or coalesce(p_file_hash,'') !~ '^[a-f0-9]{64}$' then raise exception 'Archivo o huella inválidos.'; end if;
+ perform pg_advisory_xact_lock(728394107);
+ select * into b from public.daily_base_batches where file_hash=p_file_hash;
+ if found then return to_jsonb(b); end if;
+ day:=public.daily_validate(p_records); previous:=public.daily_latest();
+ if public.daily_revision(p_records) is distinct from p_revision then raise exception 'Los datos cambiaron desde la vista previa. Vuelve a analizar el archivo antes de guardar.'; end if;
+ forward:=previous is null or day >= (select cutoff from public.daily_base_batches where id=previous);
+ ambiguous:=case when forward then public.daily_ambiguous_manual(p_records,previous) else '{}' end;
+ select coalesce(name,email,'Usuario') into actor from public.profiles where id=auth.uid();
+ insert into public.daily_base_batches(file_name,file_hash,cutoff,uploaded_by,uploaded_by_id,total_records,valid_records,warning_records,imported_records)
+ select p_file_name,p_file_hash,day,actor,auth.uid(),count(*),count(*) filter(where r->>'status'='VALID'),count(*) filter(where r->>'status'='WARNING'),count(*) from jsonb_array_elements(p_records) r returning * into b;
+ insert into public.daily_base_rows(batch_id,source_row,source_key,entity_id,entity_type,normalized_json,raw_json,status,warnings)
+ select b.id,source_row,source_key,entity_id,entity_type,n,raw,status,warnings from public.daily_prepare(p_records);
+ -- Carry user work forward. Missing unedited Excel rows expire with their snapshot;
+ -- platform additions, edits and deletion tombstones survive a daily refresh.
+ if forward and previous is not null then
+  insert into public.daily_manual(batch_id,id,source_key,normalized_json,source_record_id,edited,deleted,revision,updated_by)
+  select b.id,id,source_key,normalized_json,source_record_id,edited,deleted,revision,updated_by from public.daily_manual
+  where batch_id=previous and (edited or source_key is null or split_part(source_key,':',1)=any(ambiguous));
+ end if;
+ insert into public.daily_manual(batch_id,id,source_key,normalized_json,source_record_id)
+ select b.id,entity_id,source_key,normalized_json,id from public.daily_base_rows where batch_id=b.id and entity_type='projection' and not(split_part(source_key,':',1)=any(ambiguous))
+ on conflict(batch_id,source_key) do update set normalized_json=excluded.normalized_json,source_record_id=excluded.source_record_id,
+  edited=false,deleted=false,revision=daily_manual.revision+1,updated_at=clock_timestamp()
+ where (select source_row from public.daily_base_rows where id=excluded.source_record_id)=any(coalesce(p_apply_rows,'{}'));
+ if forward and previous is not null then
+  insert into public.daily_forecast_links(batch_id,projection_id,target_kind,target_id)
+  select b.id,l.projection_id,l.target_kind,l.target_id from public.daily_forecast_links l
+   join public.daily_manual m on m.batch_id=b.id and m.id=l.projection_id
+  where l.batch_id=previous;
+ end if;
+ insert into public.audit_logs(actor,role,action,entity,new_value)
+ values(actor,public.current_role(),'Importó BASE diaria','BASE',jsonb_build_object('batch',b.id,'date',day,'rows',b.total_records)::text);
+ return to_jsonb(b);
+end; $$;
+
+create function public.get_daily_base_snapshot(p_batch_id uuid default null) returns jsonb
+language plpgsql stable security invoker set search_path=public,pg_temp as $$
+declare bid uuid:=coalesce(p_batch_id,public.daily_latest()); b public.daily_base_batches%rowtype;
+begin
+ if auth.uid() is null then raise exception 'Inicia sesión.' using errcode='42501'; end if;
+ select * into b from public.daily_base_batches where id=bid;
+ if p_batch_id is not null and not found then raise exception 'La fecha seleccionada ya no está disponible.'; end if;
+ return jsonb_build_object('batch',case when b.id is not null then to_jsonb(b) else null end,'latestId',public.daily_latest(),
+ 'rows',coalesce((select jsonb_agg(jsonb_build_object('id',entity_id,'recordId',id,'kind',entity_type,'normalized',normalized_json,'row',source_row,'fileName',b.file_name) order by source_row)
+  from public.daily_base_rows where batch_id=bid and entity_type<>'projection'),'[]'),
+ 'manual',coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'recordId',m.source_record_id,'kind','projection','normalized',m.normalized_json,
+  'row',r.source_row,'fileName',coalesce(rb.file_name,'Ingreso en plataforma'),'revision',m.revision,'edited',m.edited) order by m.id)
+  from public.daily_manual m left join public.daily_base_rows r on r.id=m.source_record_id left join public.daily_base_batches rb on rb.id=r.batch_id
+  where m.batch_id=bid and not m.deleted),'[]'),
+ 'links',coalesce((select jsonb_agg(to_jsonb(l)) from public.daily_forecast_links l where l.batch_id=bid),'[]'));
+end; $$;
+
+create function public.save_daily_manual(p_batch_id uuid,p_id uuid,p_revision int,p_values jsonb,p_delete boolean default false)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare m public.daily_manual%rowtype; n jsonb; actor text; bid uuid:=coalesce(p_batch_id,public.daily_latest());
+begin
+ if auth.uid() is null or coalesce(public.current_role(),'') not in ('administrador','tesoreria') then raise exception 'Tu rol no permite editar MANUAL.' using errcode='42501'; end if;
+ perform pg_advisory_xact_lock(728394107);
+ if bid is null or not exists(select 1 from public.daily_base_batches where id=bid) then raise exception 'Carga una BASE antes de crear proyecciones.'; end if;
+ if p_id is not null then
+  select * into m from public.daily_manual where batch_id=bid and id=p_id for update;
+  if not found then raise exception 'Solo puedes editar registros MANUAL de esta fecha.'; end if;
+  if m.revision is distinct from p_revision then raise exception 'La proyección cambió. Actualiza la pantalla antes de guardar.'; end if;
+ end if;
+ if not p_delete then
+  n:=coalesce(m.normalized_json,'{}')||jsonb_build_object('sourceOrigin','MANUAL','entityType','projection',
+   'date',p_values->>'date','reportDate',p_values->>'date','adjustedDate',null,'amount',p_values->'amount',
+   'type',p_values->>'type','currency',p_values->>'currency','description',trim(p_values->>'description'),
+   'category',p_values->>'category','status',p_values->>'status','bank',coalesce(p_values->>'bank','Sin banco'),'settlementBank',null);
+  if coalesce(n->>'currency','') not in ('CLP','USD','UF','UTM') or coalesce(n->>'type','') not in ('income','expense')
+   or coalesce(n->>'amount','') !~ '^[0-9]+([.][0-9]+)?$' or (n->>'amount')::numeric<=0
+   or length(coalesce(n->>'description','')) not between 1 and 500
+   or coalesce(n->>'status','') not in ('proyectado','confirmado','borrador','cancelado')
+   or coalesce(n->>'date','') !~ '^\d{4}-\d{2}-\d{2}$' then raise exception 'Completa fecha, descripción, importe positivo, moneda y estado válidos.'; end if;
+  perform (n->>'date')::date;
+ else
+  if p_id is null then raise exception 'Selecciona la proyección que quieres eliminar.'; end if;
+  n:=m.normalized_json;
+ end if;
+ insert into public.daily_manual(batch_id,id,normalized_json,edited,deleted,updated_by)
+ values(bid,coalesce(p_id,gen_random_uuid()),n,true,p_delete,auth.uid())
+ on conflict(batch_id,id) do update set normalized_json=excluded.normalized_json,edited=true,deleted=excluded.deleted,
+  revision=daily_manual.revision+1,updated_at=clock_timestamp(),updated_by=auth.uid() returning * into m;
+ select coalesce(name,email,'Usuario') into actor from public.profiles where id=auth.uid();
+ insert into public.audit_logs(actor,role,action,entity,new_value) values(actor,public.current_role(),case when p_delete then 'Eliminó MANUAL' else 'Guardó MANUAL' end,'Proyecciones',jsonb_build_object('batch',bid,'id',m.id,'revision',m.revision)::text);
+ return to_jsonb(m);
+end; $$;
+
+create function public.link_daily_forecast(p_batch_id uuid,p_projection_id uuid,p_target_kind text,p_target_id uuid,p_remove boolean default false)
+returns void language plpgsql security definer set search_path=public,pg_temp as $$
+declare bid uuid:=coalesce(p_batch_id,public.daily_latest()); p jsonb; t jsonb;
+begin
+ if auth.uid() is null or coalesce(public.current_role(),'') not in ('administrador','tesoreria') then raise exception 'Tu rol no permite editar vínculos.' using errcode='42501'; end if;
+ perform pg_advisory_xact_lock(728394107);
+ if p_remove then delete from public.daily_forecast_links where batch_id=bid and projection_id=p_projection_id; return; end if;
+ select normalized_json into p from public.daily_manual where batch_id=bid and id=p_projection_id and not deleted;
+ select normalized_json into t from public.daily_base_rows where batch_id=bid and entity_id=p_target_id and entity_type=p_target_kind;
+ if p is null or t is null or p_target_kind not in ('invoice','investment') or p->>'currency' is distinct from t->>'currency'
+  or p->>'type'<>'income' or (p->>'amount')::numeric<>((t->>'amount')::numeric+case when p_target_kind='investment' then coalesce((t->>'interest')::numeric,0) else 0 end) then
+  raise exception 'El vínculo requiere un cobro ERP del mismo importe y moneda en esta fecha.'; end if;
+ insert into public.daily_forecast_links(batch_id,projection_id,target_kind,target_id) values(bid,p_projection_id,p_target_kind,p_target_id);
+end; $$;
+
+-- Preserve the previous BASE imports as frozen dates. A deliberately skipped v6
+-- change uses its last accepted trace, not the incoming value that was rejected.
+insert into public.daily_base_batches(id,file_name,file_hash,cutoff,source,uploaded_by,uploaded_by_id,status,total_records,valid_records,warning_records,error_records,duplicate_records,imported_records,created_at)
+select b.id,b.file_name,b.file_hash,coalesce(max(nullif(r.normalized_json->>'cutoffDate','')::date),max(nullif(r.normalized_json->>'date','')::date),b.created_at::date),
+ 'excel',coalesce(b.uploaded_by,'Migración'),b.uploaded_by_id,b.status,b.total_records,b.valid_records,b.warning_records,b.error_records,b.duplicate_records,b.imported_records,b.created_at
+from public.import_batches b join public.import_records r on r.import_batch_id=b.id
+where b.status in ('completed','partial') and upper(r.source_sheet)='BASE' and r.normalized_json->>'sourceProfile' like 'BASE-ONLY-%'
+group by b.id;
+with accepted as (
+ select r.*,coalesce(k.normalized_json,r.normalized_json)-'_keptEntityId' n from public.import_records r
+ join public.daily_base_batches b on b.id=r.import_batch_id
+ left join lateral(select x.normalized_json from public.import_records x where x.entity_id=nullif(r.normalized_json->>'_keptEntityId','')::uuid
+  and x.status in ('VALID','WARNING','DUPLICATE') and not(x.normalized_json?'_keptEntityId') and x.created_at<=r.created_at order by x.created_at desc,x.id desc limit 1) k on true
+ where upper(r.source_sheet)='BASE' and r.status in ('VALID','WARNING','DUPLICATE') and r.entity_type in ('cash_flow','invoice','investment','projection')
+), numbered as (
+ select *,public.base_business_key(entity_type,n)||':'||row_number() over(partition by import_batch_id,public.base_business_key(entity_type,n) order by public.base_compare_fields(n)::text,source_row) sk from accepted
+)
+insert into public.daily_base_rows(id,batch_id,source_row,source_key,entity_id,entity_type,normalized_json,raw_json,status,warnings)
+select id,import_batch_id,source_row,sk,md5(sk)::uuid,entity_type,n,raw_json,status,coalesce(warnings,'') from numbered;
+insert into public.daily_manual(batch_id,id,source_key,normalized_json,source_record_id)
+select batch_id,entity_id,source_key,normalized_json,id from public.daily_base_rows where entity_type='projection';
+-- Retain MANUAL edits made with v6, including platform-only records.
+update public.daily_manual m set normalized_json=c.current_normalized,edited=public.base_compare_fields(c.current_normalized)<>public.base_compare_fields(m.normalized_json)
+from public.base_current_records c join public.import_records old on old.entity_id=c.entity_id and old.entity_type='projection'
+where m.batch_id=public.daily_latest() and m.source_record_id=old.id;
+update public.daily_manual m set deleted=true,edited=true
+from public.import_records r where m.batch_id=public.daily_latest() and m.source_record_id=r.id
+ and r.entity_type='projection' and r.entity_id is not null and not exists(select 1 from public.projections p where p.id=r.entity_id);
+insert into public.daily_manual(batch_id,id,normalized_json,edited)
+select public.daily_latest(),p.id,jsonb_build_object('entityType','projection','sourceOrigin','MANUAL','date',p.date,'amount',p.amount,'currency',p.currency,
+ 'description',p.description,'type',p.type,'category',p.category,'status',p.status,'bank',coalesce(b.name,'Sin banco')),true
+from public.projections p left join public.banks b on b.id=p.bank_id
+where public.daily_latest() is not null and not exists(select 1 from public.import_records r where r.entity_type='projection' and r.entity_id=p.id);
+insert into public.daily_manual(batch_id,id,normalized_json,edited)
+select public.daily_latest(),p.id,jsonb_build_object('entityType','projection','sourceOrigin','MANUAL','date',p.date,'amount',p.amount,'currency',p.currency,
+ 'description',p.description,'type',p.type,'category',p.category,'status',case when p.status in ('cancelado','borrador') then p.status else 'proyectado' end,'bank',coalesce(b.name,'Sin banco')),true
+from public.cash_flow p left join public.banks b on b.id=p.bank_id
+where public.daily_latest() is not null and p.origin='manual' and p.status not in ('pagado','conciliado')
+ and not exists(select 1 from public.import_records r where r.entity_type='cash_flow' and r.entity_id=p.id);
+insert into public.daily_forecast_links(batch_id,projection_id,target_kind,target_id)
+select distinct on(l.id) public.daily_latest(),coalesce(pr.entity_id,pm.id),l.target_kind,tr.entity_id
+from public.forecast_links l
+left join public.import_records op on op.entity_id=l.projection_id and op.entity_type='projection'
+left join public.daily_base_rows pr on pr.id=op.id and pr.batch_id=public.daily_latest()
+left join public.daily_manual pm on pm.batch_id=public.daily_latest() and pm.id=l.projection_id
+join public.import_records ot on ot.entity_id=l.target_id and ot.entity_type=l.target_kind
+join public.daily_base_rows tr on tr.id=ot.id and tr.batch_id=public.daily_latest()
+where coalesce(pr.entity_id,pm.id) is not null
+on conflict do nothing;
+
+-- Retire the alternate write paths. ERP data cannot be changed through an old
+-- screen or a direct authenticated REST request. Imports use the checked RPC.
+revoke insert,update,delete on public.cash_flow,public.invoices,public.investments,public.projections,public.bank_accounts,public.customers,public.forecast_links from authenticated,anon;
+revoke execute on function public.import_base_changes(text,text,jsonb,text,int[]) from public,anon,authenticated;
+revoke execute on function public.import_treasury_records(text,text,jsonb) from public,anon,authenticated;
+do $$ declare f record; begin
+ for f in select p.oid::regprocedure sig,p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'
+ and (p.proname like 'daily_%' or p.proname in ('compare_daily_base','import_daily_base','get_daily_base_snapshot','save_daily_manual','link_daily_forecast')) loop
+  execute format('revoke all on function %s from public,anon',f.sig);
+  execute format('grant execute on function %s to authenticated',f.sig);
+ end loop;
+end $$;

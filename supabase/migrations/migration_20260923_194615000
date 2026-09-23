@@ -1,0 +1,123 @@
+begin;
+create table public.treasury_statements (
+ id uuid primary key default gen_random_uuid(),file_name text not null,file_hash text not null,account text not null,currency text not null,
+ start_date date not null,end_date date not null,opening numeric,closing numeric,row_count int not null,created_by uuid references public.profiles(id),created_at timestamptz not null default clock_timestamp(),
+ unique(file_hash,account,currency)
+);
+create table public.treasury_bank_transactions (
+ id uuid primary key default gen_random_uuid(),account text not null,currency text not null,date date not null,reference text not null,description text not null,amount numeric not null check(amount<>0),identity_key text not null,unique(account,currency,identity_key)
+);
+create table public.treasury_statement_rows(statement_id uuid references public.treasury_statements(id) on delete cascade,bank_id uuid references public.treasury_bank_transactions(id),line int not null,primary key(statement_id,line));
+create table public.treasury_matches (
+ id uuid primary key default gen_random_uuid(),batch_id uuid not null references public.daily_base_batches(id) on delete cascade,account text not null,currency text not null,note text not null,created_by uuid references public.profiles(id),created_at timestamptz not null default clock_timestamp(),voided_at timestamptz,void_reason text
+);
+create table public.treasury_match_items (
+ id uuid primary key default gen_random_uuid(),match_id uuid not null references public.treasury_matches(id) on delete cascade,
+ ledger_id uuid references public.daily_base_rows(id) on delete cascade,bank_id uuid references public.treasury_bank_transactions(id),amount numeric not null check(amount>0),check((ledger_id is null)<>(bank_id is null))
+);
+create index treasury_match_ledger on public.treasury_match_items(ledger_id);
+create index treasury_match_bank on public.treasury_match_items(bank_id);
+create function public.treasury_import_statement(p_name text,p_hash text,p_account text,p_currency text,p_rows jsonb,p_opening numeric default null,p_closing numeric default null) returns jsonb
+language plpgsql security definer set search_path=public,pg_temp as $$
+declare stmt public.treasury_statements%rowtype; item record; bank_id uuid; movement numeric; sum_amount numeric; first_date date; last_date date;
+begin
+ p_account:=p_account::jsonb::text;
+ perform public.treasury_require(true); perform pg_advisory_xact_lock(728394107);
+ if length(trim(coalesce(p_name,''))) not between 1 and 255 or coalesce(p_hash,'') !~ '^[a-f0-9]{64}$' or length(coalesce(p_account,'')) not between 1 and 500 or coalesce(p_currency,'') not in ('CLP','USD','UF','UTM') then raise exception 'Cartola, cuenta o moneda inválida.'; end if;
+ if jsonb_typeof(p_rows) is distinct from 'array' or jsonb_array_length(p_rows) not between 1 and 20000 or octet_length(p_rows::text)>12000000 then raise exception 'La cartola debe contener entre 1 y 20.000 movimientos.'; end if;
+ select * into stmt from public.treasury_statements where file_hash=p_hash and account=p_account and currency=p_currency;
+ if found then return to_jsonb(stmt); end if;
+ for item in select value n from jsonb_array_elements(p_rows) loop
+ if coalesce(item.n->>'date','') !~ '^\d{4}-\d{2}-\d{2}$' or coalesce(item.n->>'amount','') !~ '^-?[0-9]+([.][0-9]+)?$' or length(coalesce(item.n->>'reference',''))>200 or length(coalesce(item.n->>'description',''))>1000 then raise exception 'Fecha, importe o texto inválido en la cartola.'; end if;
+ movement:=(item.n->>'amount')::numeric;if movement=0 then raise exception 'La cartola contiene un importe cero.'; end if;
+ perform (item.n->>'date')::date;
+ end loop;
+ select sum((n->>'amount')::numeric),min((n->>'date')::date),max((n->>'date')::date) into sum_amount,first_date,last_date from jsonb_array_elements(p_rows) n;
+ if (p_opening is null)<>(p_closing is null) or (p_opening is not null and abs(p_opening+sum_amount-p_closing)>0.005) then raise exception 'Saldo inicial + movimientos no coincide con el saldo final de la cartola.'; end if;
+ insert into public.treasury_statements(file_name,file_hash,account,currency,start_date,end_date,opening,closing,row_count,created_by)
+ values(p_name,p_hash,p_account,p_currency,first_date,last_date,p_opening,p_closing,jsonb_array_length(p_rows),auth.uid()) returning * into stmt;
+ for item in with parsed as(select n,ordinality line,md5(jsonb_build_array(n->>'date',coalesce(n->>'reference',''),coalesce(n->>'description',''),(n->>'amount')::numeric)::text) fingerprint from jsonb_array_elements(p_rows) with ordinality x(n,ordinality))
+ select *,fingerprint||':'||row_number() over(partition by fingerprint order by line) identity from parsed loop
+ insert into public.treasury_bank_transactions(account,currency,date,reference,description,amount,identity_key)
+ values(p_account,p_currency,(item.n->>'date')::date,coalesce(item.n->>'reference',''),coalesce(item.n->>'description',''),(item.n->>'amount')::numeric,item.identity)
+ on conflict(account,currency,identity_key) do nothing returning id into bank_id;
+ if bank_id is null then select id into bank_id from public.treasury_bank_transactions where account=p_account and currency=p_currency and identity_key=item.identity; end if;
+ insert into public.treasury_statement_rows values(stmt.id,bank_id,item.line);
+ end loop;
+ perform public.treasury_audit('Importó cartola independiente','Conciliación',null,to_jsonb(stmt)); return to_jsonb(stmt);
+end; $$;
+create function public.treasury_confirm_match(p_batch uuid,p_account text,p_currency text,p_ledger jsonb,p_bank jsonb,p_note text) returns uuid
+language plpgsql security definer set search_path=public,pg_temp as $$
+declare x jsonb; ledger public.daily_base_rows%rowtype; bank public.treasury_bank_transactions%rowtype; alloc numeric; used numeric; direction int; current_direction int; ledger_total numeric:=0; bank_total numeric:=0; match_id uuid;
+begin
+ p_account:=p_account::jsonb::text;
+ perform public.treasury_require(true);perform pg_advisory_xact_lock(728394107);
+ if jsonb_typeof(p_ledger) is distinct from 'array' or jsonb_typeof(p_bank) is distinct from 'array' or jsonb_array_length(p_ledger) not between 1 and 100 or jsonb_array_length(p_bank) not between 1 and 100 or length(trim(coalesce(p_note,''))) not between 3 and 1000 then raise exception 'Selecciona ambos lados y escribe el motivo de conciliación.'; end if;
+ if exists(select 1 from jsonb_array_elements(p_ledger) n group by n->>'id' having count(*)>1) or exists(select 1 from jsonb_array_elements(p_bank) n group by n->>'id' having count(*)>1) then raise exception 'Movimiento seleccionado más de una vez.'; end if;
+ for x in select value from jsonb_array_elements(p_ledger) loop
+ select * into ledger from public.daily_base_rows where id=(x->>'id')::uuid and batch_id=p_batch;
+ if not found or ledger.entity_type<>'cash_flow' or ledger.normalized_json->>'sourceOrigin'<>'BANCO' or ledger.normalized_json->>'currency'<>p_currency
+ or jsonb_build_array(coalesce(ledger.normalized_json->>'bank','Sin banco'),coalesce(ledger.normalized_json->>'ledgerCode',''))::text<>p_account then raise exception 'Movimiento BASE incompatible con la cuenta, moneda o fecha de trabajo.'; end if;
+ if coalesce(x->>'amount','') !~ '^[0-9]+([.][0-9]+)?$' or (x->>'amount')::numeric<=0 then raise exception 'Asignación inválida.'; end if;
+ alloc:=(x->>'amount')::numeric;current_direction:=case when ledger.normalized_json->>'type'='expense' then -1 else 1 end;
+ if direction is not null and direction<>current_direction then raise exception 'No mezcles ingresos y egresos en una conciliación.'; end if;direction:=current_direction;
+ if exists(select 1 from public.treasury_match_items i join public.treasury_matches m on m.id=i.match_id join public.daily_base_rows r on r.id=i.ledger_id where m.voided_at is null and r.entity_id=ledger.entity_id and (m.currency<>p_currency or m.account<>p_account or r.normalized_json->>'type'<>ledger.normalized_json->>'type')) then raise exception 'La moneda, cuenta o sentido cambió. Revierte la conciliación anterior antes de continuar.';end if;
+ select coalesce(sum(i.amount),0) into used from public.treasury_match_items i join public.treasury_matches m on m.id=i.match_id join public.daily_base_rows r on r.id=i.ledger_id where m.voided_at is null and r.entity_id=ledger.entity_id;
+ if used+alloc>(ledger.normalized_json->>'amount')::numeric+0.005 then raise exception 'BASE ya fue conciliada o el importe supera el saldo pendiente.'; end if;
+ ledger_total:=ledger_total+alloc;
+ end loop;
+ for x in select value from jsonb_array_elements(p_bank) loop
+ select * into bank from public.treasury_bank_transactions where id=(x->>'id')::uuid;
+ if not found or bank.account<>p_account or bank.currency<>p_currency or sign(bank.amount)<>direction then raise exception 'Movimiento bancario incompatible.'; end if;
+ if coalesce(x->>'amount','') !~ '^[0-9]+([.][0-9]+)?$' or (x->>'amount')::numeric<=0 then raise exception 'Asignación inválida.'; end if;
+ alloc:=(x->>'amount')::numeric;
+ select coalesce(sum(i.amount),0) into used from public.treasury_match_items i join public.treasury_matches m on m.id=i.match_id where i.bank_id=bank.id and m.voided_at is null;
+ if used+alloc>abs(bank.amount)+0.005 then raise exception 'Cartola ya conciliada o importe superior al pendiente.'; end if;
+ bank_total:=bank_total+alloc;
+ end loop;
+ if abs(bank_total-ledger_total)>0.005 then raise exception 'Los importes asignados a BASE y cartola deben coincidir.'; end if;
+ insert into public.treasury_matches(batch_id,account,currency,note,created_by) values(p_batch,p_account,p_currency,trim(p_note),auth.uid()) returning id into match_id;
+ insert into public.treasury_match_items(match_id,ledger_id,amount) select match_id,(n->>'id')::uuid,(n->>'amount')::numeric from jsonb_array_elements(p_ledger) n;
+ insert into public.treasury_match_items(match_id,bank_id,amount) select match_id,(n->>'id')::uuid,(n->>'amount')::numeric from jsonb_array_elements(p_bank) n;
+ perform public.treasury_audit('Confirmó conciliación','Conciliación',null,jsonb_build_object('id',match_id,'amount',ledger_total,'currency',p_currency));return match_id;
+end; $$;
+create function public.treasury_void_match(p_id uuid,p_reason text) returns void language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ perform public.treasury_require(true);perform pg_advisory_xact_lock(728394107);
+ if length(trim(coalesce(p_reason,''))) not between 5 and 1000 then raise exception 'Explica el motivo de reversa (5 a 1000 caracteres).'; end if;
+ update public.treasury_matches set voided_at=clock_timestamp(),void_reason=trim(p_reason) where id=p_id and voided_at is null;
+ if not found then raise exception 'La conciliación ya fue revertida o no existe.'; end if;
+ perform public.treasury_audit('Revirtió conciliación','Conciliación',null,jsonb_build_object('id',p_id,'reason',p_reason));
+end; $$;
+create function public.treasury_reconciliation(p_account text,p_currency text) returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin perform public.treasury_require(); p_account:=p_account::jsonb::text;
+ return jsonb_build_object('statements',coalesce((select jsonb_agg(s order by end_date desc,created_at desc,id desc) from public.treasury_statements s where account=p_account and currency=p_currency),'[]'),
+ 'transactions',coalesce((select jsonb_agg(to_jsonb(b)||jsonb_build_object('allocated',coalesce((select sum(i.amount) from public.treasury_match_items i join public.treasury_matches m on m.id=i.match_id where m.voided_at is null and i.bank_id=b.id),0)) order by date,id) from public.treasury_bank_transactions b where account=p_account and currency=p_currency),'[]'),
+ 'ledgerAllocations',coalesce((select jsonb_agg(x) from (select r.entity_id id,sum(i.amount) amount from public.treasury_match_items i join public.treasury_matches m on m.id=i.match_id join public.daily_base_rows r on r.id=i.ledger_id where m.voided_at is null and m.account=p_account and m.currency=p_currency group by r.entity_id) x),'[]'),
+ 'matches',coalesce((select jsonb_agg(to_jsonb(m)||jsonb_build_object('items',(select jsonb_agg(i) from public.treasury_match_items i where i.match_id=m.id)) order by created_at desc,id desc) from public.treasury_matches m where account=p_account and currency=p_currency),'[]'));
+end; $$;
+alter function public.excel_deletion_plan(uuid) rename to excel_deletion_plan_v7;
+revoke all on function public.excel_deletion_plan_v7(uuid) from public,anon,authenticated;
+create function public.excel_deletion_plan(p_batch_id uuid default null) returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+declare plan jsonb; ids uuid[]; extra jsonb;
+begin
+ plan:=public.excel_deletion_plan_v7(p_batch_id);select array_agg(value::uuid) into ids from jsonb_array_elements_text(plan->'batchIds');
+ extra:=jsonb_build_object(
+ 'scenarios',(select coalesce(jsonb_agg(jsonb_build_array(id,revision) order by id),'[]') from public.treasury_scenarios where batch_id=any(ids)),
+ 'forecasts',(select coalesce(jsonb_agg(id order by id),'[]') from public.treasury_forecasts where batch_id=any(ids)),
+ 'tasks',(select coalesce(jsonb_agg(jsonb_build_array(id,revision) order by id),'[]') from public.treasury_tasks where batch_id=any(ids)),
+ 'comments',(select coalesce(jsonb_agg(id order by id),'[]') from public.treasury_comments where batch_id=any(ids)),
+ 'attachments',(select coalesce(jsonb_agg(id order by id),'[]') from public.treasury_attachments where batch_id=any(ids)),
+ 'matches',(select coalesce(jsonb_agg(jsonb_build_array(id,voided_at) order by id),'[]') from public.treasury_matches where batch_id=any(ids)));
+ return plan||jsonb_build_object('revision',md5((plan->>'revision')||extra::text),'dependentWork',(select jsonb_object_agg(key,jsonb_array_length(value)) from jsonb_each(extra)));
+end; $$;
+do $$ declare t text; f record; begin
+ foreach t in array array['treasury_statements','treasury_bank_transactions','treasury_statement_rows','treasury_matches','treasury_match_items'] loop
+ execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from anon,authenticated',t);execute format('grant select on public.%I to authenticated',t);
+ execute format('create policy approved_read on public.%I for select to authenticated using(public.treasury_approved())',t);
+ end loop;
+ for f in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('treasury_import_statement','treasury_confirm_match','treasury_void_match','treasury_reconciliation','excel_deletion_plan') loop
+ execute format('revoke all on function %s from public,anon',f.signature);execute format('grant execute on function %s to authenticated',f.signature);end loop;
+end; $$;
+notify pgrst,'reload schema';
+commit;

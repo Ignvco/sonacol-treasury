@@ -1,0 +1,9 @@
+project_id = "spb-t4nn4dsbn3w91i42"
+
+# Server-to-server authentication is checked with SAP_IMPORT_TOKEN in the handler.
+[functions.sap-import]
+verify_jwt = false
+
+# JWT is checked by treasury_assistant_authorize using the caller token.
+[functions.treasury-assistant]
+verify_jwt = false

@@ -1,0 +1,3 @@
+-- Ensure the app has at least one administrator so admin-only modules are reachable.
+update public.profiles set role='administrador' where email='szamoranoh@gmail.com';
+update public.treasury_access set can_delete=true where user_id=(select id from public.profiles where email='szamoranoh@gmail.com');
