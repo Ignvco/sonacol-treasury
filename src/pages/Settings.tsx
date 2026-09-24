@@ -230,7 +230,7 @@ export default function Settings() {
               Las cuentas bancarias se muestran enmascaradas. La información
               original se conserva en la base de datos para su trazabilidad.
             </p>
-            <div className="flex items-center justify-between rounded-xl border border-[#EAEAEA] bg-[#FAFAFA] px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-sunken px-4 py-3">
               <div className="min-w-0">
                 <p className="text-[12px] font-semibold text-foreground">
                   Mi rol
@@ -324,7 +324,7 @@ export default function Settings() {
             {ROLES.map((role) => (
               <div
                 key={role.name}
-                className="flex items-center gap-3 rounded-2xl border border-[#EAEAEA] px-4 py-3"
+                className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3"
               >
                 <span
                   className={cn(

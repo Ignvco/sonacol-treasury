@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -23,7 +24,8 @@ import type {
 } from "@/import-engine/types";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
+import { formatNumber } from "@/financial-engine/format";
 import { DataTable } from "@/components/treasury/DataTable";
 import {
   StatusBadge,
@@ -210,7 +212,7 @@ export default function Importations() {
       {failure && (
         <div
           role="alert"
-          className="flex items-start justify-between gap-3 rounded-2xl border border-danger/20 bg-danger-soft p-4 text-sm text-danger"
+          className="flex items-start justify-between gap-3 rounded-2xl border border-danger/25 bg-danger-soft p-4 text-sm text-danger"
         >
           <p>{failure}</p>
           <button aria-label="Cerrar mensaje" onClick={() => setFailure("")}>
@@ -236,7 +238,7 @@ export default function Importations() {
               if (!busy) choose(e.dataTransfer.files);
             }}
             className={cn(
-              "group flex min-h-[286px] flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-brand/20 bg-white p-7 text-center transition-colors",
+              "group flex min-h-[286px] flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-brand/20 bg-card p-7 text-center transition-colors",
               dragging && "border-brand bg-brand-soft",
             )}
           >
@@ -274,7 +276,7 @@ export default function Importations() {
               XLSX, XLSM y XLS · Hasta 20 MB y 20.000 filas
             </p>
           </div>
-          <aside className="rounded-[22px] border border-brand/10 bg-[#edf1ff] p-6">
+          <aside className="rounded-[22px] border border-brand/10 bg-brand-soft p-6">
             <div className="mb-5 flex items-center gap-2 text-brand">
               <ShieldCheck size={19} />
               <h2 className="text-sm font-semibold">
@@ -303,7 +305,7 @@ export default function Importations() {
                   />
                   <div>
                     <p className="text-sm font-semibold">{title}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {detail}
                     </p>
                   </div>
@@ -362,35 +364,46 @@ export default function Importations() {
           }}
         />
       )}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <KpiCard
-          label="Archivos guardados"
-          value={items.length}
-          subtext="Importaciones disponibles"
-          plain
-          icon={Files}
-        />
-        <KpiCard
-          label="Filas analizadas"
-          value={items.reduce((a, b) => a + b.totalRecords, 0)}
-          subtext="En el historial disponible"
-          plain
-        />
-        <KpiCard
-          label="Filas guardadas"
-          value={items.reduce((a, b) => a + (b.importedRecords ?? 0), 0)}
-          subtext="Confirmadas en esta versión"
-          plain
-          tone="success"
-        />
-        <KpiCard
-          label="Filas con errores"
-          value={items.reduce((a, b) => a + b.errorRecords, 0)}
-          subtext="Consulta el detalle para corregir"
-          plain
-          tone={items.some((b) => b.errorRecords) ? "danger" : "default"}
-        />
-      </div>
+      <BentoStats
+        items={[
+          {
+            key: "imported",
+            label: "Filas guardadas",
+            valueText: formatNumber(
+              items.reduce((a, b) => a + (b.importedRecords ?? 0), 0),
+            ),
+            subtext: "Confirmadas en esta versión",
+            tone: "success",
+            icon: ShieldCheck,
+          },
+          {
+            key: "files",
+            label: "Archivos guardados",
+            valueText: formatNumber(items.length),
+            subtext: "Importaciones disponibles",
+            icon: Files,
+          },
+          {
+            key: "rows",
+            label: "Filas analizadas",
+            valueText: formatNumber(
+              items.reduce((a, b) => a + b.totalRecords, 0),
+            ),
+            subtext: "En el historial disponible",
+            icon: FileSpreadsheet,
+          },
+          {
+            key: "errors",
+            label: "Filas con errores",
+            valueText: formatNumber(
+              items.reduce((a, b) => a + b.errorRecords, 0),
+            ),
+            subtext: "Consulta el detalle para corregir",
+            tone: items.some((b) => b.errorRecords) ? "danger" : "default",
+            icon: AlertTriangle,
+          },
+        ]}
+      />
       {canWrite && (
         <ExcelFileManagement
           batches={items}
@@ -436,7 +449,7 @@ export default function Importations() {
                 ? (b) =>
                     b.source === "excel" ? (
                       <button
-                        className="t-button-secondary text-red-700"
+                        className="t-button-secondary text-danger"
                         aria-label={`Eliminar ${b.fileName}`}
                         disabled={busy}
                         onClick={(e) => {
@@ -594,7 +607,7 @@ function BatchRecords({
                 .then(() => toast.success("Reporte exportado"))
                 .catch((e) => toast.error(e.message));
             }}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#EAEAEA] bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand"
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-card px-3 text-[12px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand"
           >
             <Download className="h-3.5 w-3.5" />
             Reporte

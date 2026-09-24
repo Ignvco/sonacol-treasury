@@ -10,10 +10,10 @@ const TONES: Record<StatusTone, string> = {
 };
 
 const DOTS: Record<StatusTone, string> = {
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-danger",
-  info: "bg-info",
+  success: "bg-success-vivid",
+  warning: "bg-warning-vivid",
+  danger: "bg-danger-vivid",
+  info: "bg-info-vivid",
   muted: "bg-muted-foreground",
 };
 

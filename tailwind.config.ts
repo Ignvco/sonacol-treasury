@@ -58,21 +58,27 @@ export default {
 					dark: 'hsl(var(--brand-dark))',
 					soft: 'hsl(var(--brand-soft))',
 					muted: 'hsl(var(--brand-muted))',
+					deep: 'hsl(var(--brand-deep))'
 				},
+				sunken: 'hsl(var(--sunken))',
 				success: {
 					DEFAULT: 'hsl(var(--success))',
+					vivid: 'hsl(var(--success-vivid))',
 					soft: 'hsl(var(--success-soft))'
 				},
 				warning: {
 					DEFAULT: 'hsl(var(--warning))',
+					vivid: 'hsl(var(--warning-vivid))',
 					soft: 'hsl(var(--warning-soft))'
 				},
 				danger: {
 					DEFAULT: 'hsl(var(--danger))',
+					vivid: 'hsl(var(--danger-vivid))',
 					soft: 'hsl(var(--danger-soft))'
 				},
 				info: {
 					DEFAULT: 'hsl(var(--info))',
+					vivid: 'hsl(var(--info-vivid))',
 					soft: 'hsl(var(--info-soft))'
 				},
 				sidebar: {
@@ -97,6 +103,12 @@ export default {
 				card: '0 4px 20px rgba(0, 0, 0, 0.04)',
 				'card-hover': '0 10px 32px rgba(0, 0, 0, 0.07)',
 				soft: '0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05)',
+				bento: 'var(--shadow-bento)',
+				'bento-hover': 'var(--shadow-bento-hover)',
+			},
+			backgroundImage: {
+				'gradient-brand': 'var(--gradient-brand)',
+				'gradient-brand-soft': 'var(--gradient-brand-soft)',
 			},
 			fontFamily: {
 				sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
@@ -117,13 +129,28 @@ export default {
 				'pulse-soft': {
 					'0%, 100%': { opacity: '1' },
 					'50%': { opacity: '0.55' }
+				},
+				rise: {
+					from: { opacity: '0', transform: 'translateY(14px)' },
+					to: { opacity: '1', transform: 'translateY(0)' }
+				},
+				'slide-in': {
+					from: { opacity: '0', transform: 'translateX(-12px)' },
+					to: { opacity: '1', transform: 'translateX(0)' }
+				},
+				draw: {
+					from: { 'stroke-dashoffset': '320' },
+					to: { 'stroke-dashoffset': '0' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'fade-in': 'fade-in 0.35s ease both',
-				'pulse-soft': 'pulse-soft 2s ease-in-out infinite'
+				'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
+				rise: 'rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards',
+				'slide-in': 'slide-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
+				draw: 'draw 1.3s ease-out both'
 			}
 		}
 	},

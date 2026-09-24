@@ -81,7 +81,7 @@ export default function Assistant() {
               "rounded-2xl border p-4 text-left text-sm font-medium " +
               (t === tool
                 ? "border-brand bg-brand-soft text-brand"
-                : "bg-white hover:border-brand/40")
+                : "bg-card hover:border-brand/40")
             }
             key={t}
             onClick={() => {

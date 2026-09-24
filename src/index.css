@@ -20,6 +20,25 @@
     --brand-soft: 229 100% 96%; /* light blue tint for active states */
     --brand-muted: 228 100% 90%;
 
+    /* Bento surfaces — executive dashboard (Resumen) */
+    --sunken: 220 30% 98%;
+    --brand-deep: 229 92% 15%;
+    --gradient-brand: linear-gradient(
+      135deg,
+      hsl(229 92% 14%) 0%,
+      hsl(229 92% 24%) 46%,
+      hsl(229 96% 36%) 100%
+    );
+    --gradient-brand-soft: linear-gradient(
+      180deg,
+      hsl(var(--brand-soft)) 0%,
+      hsl(var(--brand-muted) / 0.5) 100%
+    );
+    --shadow-bento: 0 1px 2px rgba(16, 24, 40, 0.04),
+      0 12px 30px -14px rgba(16, 24, 40, 0.18);
+    --shadow-bento-hover: 0 2px 4px rgba(16, 24, 40, 0.05),
+      0 20px 44px -18px rgba(16, 24, 40, 0.24);
+
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96%;
@@ -27,14 +46,19 @@
     --accent: 0 0% 96%;
     --accent-foreground: 0 0% 9%;
 
-    /* Status */
-    --success: 152 60% 40%;
+    /* Status — the base token is the readable text colour, "-vivid" is only for
+       fills, dots and bars, and "-soft" is the tinted surface behind text. */
+    --success: 152 65% 26%;
+    --success-vivid: 152 60% 40%;
     --success-soft: 152 60% 95%;
-    --warning: 35 100% 50%; /* corporate orange #FF9400 */
+    --warning: 30 80% 30%;
+    --warning-vivid: 35 100% 50%; /* corporate orange #FF9400 */
     --warning-soft: 35 100% 96%;
-    --danger: 3 65% 52%;
+    --danger: 3 65% 35%;
+    --danger-vivid: 3 65% 52%;
     --danger-soft: 3 70% 96%;
-    --info: 207 90% 50%;
+    --info: 207 90% 30%;
+    --info-vivid: 207 90% 50%;
     --info-soft: 207 80% 95%;
 
     --destructive: 3 65% 52%;
@@ -131,12 +155,12 @@
 @layer components {
   /* Premium card shell used across all treasury modules */
   .t-card {
-    @apply rounded-[20px] border border-[#EAEAEA] bg-card;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    @apply rounded-[24px] border border-border bg-card;
+    box-shadow: var(--shadow-bento);
     transition: box-shadow 0.25s ease, transform 0.25s ease;
   }
   .t-card-hover:hover {
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.07);
+    box-shadow: var(--shadow-bento-hover);
     transform: translateY(-1px);
   }
 
@@ -162,7 +186,15 @@
   }
 
   .t-input {
-    @apply h-9 rounded-xl border border-input bg-card px-3 text-[13px] text-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-ring focus:ring-2 focus:ring-ring/20;
+    @apply h-9 rounded-xl border border-input bg-card px-3 text-[13px] text-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground/80 focus:border-ring focus:ring-2 focus:ring-ring/20;
+  }
+
+  /* Subtle dot texture for the app canvas (bento-box cue). */
+  .t-canvas {
+    background-color: hsl(var(--background));
+    background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-position: -1px -1px;
   }
 }
 
@@ -191,7 +223,7 @@ body,
 }
 @layer components {
   .t-button-primary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-50; }
-  .t-button-secondary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50; }
+  .t-button-secondary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50; }
 }
 @media (max-width: 640px) { .t-input { min-height: 42px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

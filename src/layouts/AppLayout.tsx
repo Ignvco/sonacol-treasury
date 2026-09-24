@@ -7,7 +7,6 @@ import { Loader2 } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { TopHeader } from "./TopHeader";
 import { useAuth } from "@/contexts/auth-context";
-import { WorkingDate } from "@/components/treasury/WorkingDate";
 
 /** App shell: compact sidebar + header + scrollable content. Auth-guarded. */
 export function AppLayout() {
@@ -58,10 +57,9 @@ export function AppLayout() {
           <main
             id="main-content"
             tabIndex={-1}
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+            className="t-canvas min-h-0 min-w-0 flex-1 overflow-y-auto"
           >
             <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 md:py-7 xl:px-8">
-              <WorkingDate />
               <Outlet key={user.id} />
             </div>
           </main>

@@ -86,7 +86,7 @@ export function DeleteImportsDialog({
         if (!open && !saving) onClose();
       }}
     >
-      <AlertDialogContent className="flex max-h-[90dvh] w-[calc(100%_-_2rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-white p-0">
+      <AlertDialogContent className="flex max-h-[90dvh] w-[calc(100%_-_2rem)] flex-col gap-0 overflow-hidden rounded-[24px] bg-card p-0">
         <AlertDialogHeader className="shrink-0 border-b px-6 py-4">
           <AlertDialogTitle>
             {target
@@ -109,7 +109,7 @@ export function DeleteImportsDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-xl bg-red-50 p-3 text-sm text-red-800"
+              className="rounded-xl bg-danger-soft p-3 text-sm text-danger"
             >
               {error}
             </div>
@@ -158,7 +158,7 @@ export function DeleteImportsDialog({
               ) : (
                 <>
                   {plan.dependentWork && (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                    <p className="rounded-xl border border-warning/25 bg-warning-soft p-3 text-sm text-warning">
                       Trabajo vinculado que también se eliminará:{" "}
                       {Object.entries(plan.dependentWork)
                         .map(
@@ -208,10 +208,10 @@ export function DeleteImportsDialog({
             </>
           )}
         </div>
-        <AlertDialogFooter className="shrink-0 border-t bg-white px-6 py-4">
+        <AlertDialogFooter className="shrink-0 border-t bg-card px-6 py-4">
           <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
           <button
-            className="t-button-primary bg-red-700 hover:bg-red-800"
+            className="t-button-primary bg-danger-vivid hover:bg-danger-vivid/90"
             disabled={
               (!plan?.files && !plan?.legacyOrphans) ||
               confirmation !== phrase ||

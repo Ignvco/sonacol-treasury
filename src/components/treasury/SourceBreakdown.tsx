@@ -30,7 +30,7 @@ export function SourceBreakdown({title,rows,onClose}:{title:string;rows:(Treasur
   {busy&&<p role="status">Cargando fila original…</p>}{error&&<p role="alert" className="text-danger">{error}</p>}
   {detail&&<section className="rounded-xl border p-4"><h3 className="mb-3 text-sm font-semibold">{detail.title}</h3><dl className="grid gap-2 sm:grid-cols-2">{Object.entries(detail.raw).map(([key,cell])=>{
    const c=cell&&typeof cell==="object"?cell as {value?:unknown;formula?:string}:null;
-   return <div key={key} className="min-w-0 rounded-lg bg-slate-50 p-3"><dt className="text-xs text-muted-foreground">{key}</dt><dd className="mt-1 break-words text-sm">{String(c?c.value??"—":cell??"—")}</dd>{c?.formula&&<dd className="mt-1 break-all text-xs text-muted-foreground">Fórmula guardada: {c.formula}</dd>}</div>;
+   return <div key={key} className="min-w-0 rounded-lg bg-sunken p-3"><dt className="text-xs text-muted-foreground">{key}</dt><dd className="mt-1 break-words text-sm">{String(c?c.value??"—":cell??"—")}</dd>{c?.formula&&<dd className="mt-1 break-all text-xs text-muted-foreground">Fórmula guardada: {c.formula}</dd>}</div>;
   })}</dl></section>}
  </DialogContent></Dialog>;
 }

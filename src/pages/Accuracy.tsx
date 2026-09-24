@@ -12,7 +12,8 @@ import {
 } from "@/financial-engine/decisions";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
+import { CalendarCheck2, Scale, Target } from "lucide-react";
 import { DataTable } from "@/components/treasury/DataTable";
 import { LoadingState, ErrorState } from "@/components/treasury/feedback";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
@@ -58,7 +59,7 @@ export default function Accuracy() {
         title="Precisión de las previsiones"
         subtitle="Contrasta lo que planificaste con el saldo contable de las BASE posteriores."
       />
-      <p className="rounded-xl border bg-white p-4 text-sm">
+      <p className="t-card p-4 text-sm">
         La observación es la última BASE aceptada de cada fecha y moneda. No se
         inventan valores para días sin carga ni se equipara el saldo contable a
         una cartola conciliada.
@@ -107,34 +108,42 @@ export default function Accuracy() {
       ) : (
         accuracy && (
           <>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <KpiCard
-                label="Días observados"
-                value={accuracy.count}
-                plain
-                subtext={"De " + forecast.context.horizon + " días previstos"}
-              />
-              <KpiCard
-                label="Error absoluto medio"
-                value={accuracy.mae ?? 0}
-                valueText={
-                  accuracy.mae === null
-                    ? "Sin observaciones"
-                    : baseNumber(accuracy.mae) + " " + forecast.context.currency
-                }
-              />
-              <KpiCard
-                label="Sesgo: observado − previsto"
-                value={accuracy.bias ?? 0}
-                valueText={
-                  accuracy.bias === null
-                    ? "Sin observaciones"
-                    : baseNumber(accuracy.bias) +
-                      " " +
-                      forecast.context.currency
-                }
-              />
-            </div>
+            <BentoStats
+              items={[
+                {
+                  key: "mae",
+                  label: "Error absoluto medio",
+                  valueText:
+                    accuracy.mae === null
+                      ? "Sin observaciones"
+                      : baseNumber(accuracy.mae) +
+                        " " +
+                        forecast.context.currency,
+                  subtext: "Desvío promedio entre lo previsto y lo observado",
+                  icon: Target,
+                },
+                {
+                  key: "count",
+                  label: "Días observados",
+                  valueText: String(accuracy.count),
+                  subtext:
+                    "De " + forecast.context.horizon + " días previstos",
+                  icon: CalendarCheck2,
+                },
+                {
+                  key: "bias",
+                  label: "Sesgo: observado − previsto",
+                  valueText:
+                    accuracy.bias === null
+                      ? "Sin observaciones"
+                      : baseNumber(accuracy.bias) +
+                        " " +
+                        forecast.context.currency,
+                  subtext: "Signo positivo: la caja real quedó por encima",
+                  icon: Scale,
+                },
+              ]}
+            />
             <SectionCard
               title="Comparación por fecha"
               subtitle="Una muestra pequeña describe ese periodo; no demuestra capacidad predictiva futura."

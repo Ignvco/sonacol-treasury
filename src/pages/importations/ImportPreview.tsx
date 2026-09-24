@@ -118,7 +118,7 @@ export function ImportPreview({
           {Object.entries(labels).map(([key, label]) => (
             <button
               key={key}
-              className={`rounded-xl border p-4 text-left ${filter === key ? "border-brand bg-brand-soft" : "bg-slate-50"}`}
+              className={`rounded-xl border p-4 text-left ${filter === key ? "border-brand bg-brand-soft" : "bg-sunken"}`}
               onClick={() => setFilter(filter === key ? "" : key)}
             >
               <p className="text-xs text-muted-foreground">{label}</p>
@@ -143,7 +143,7 @@ export function ImportPreview({
         {preview.comparisonError && !cutoffIssue && (
           <div
             role="alert"
-            className="mb-4 rounded-xl border border-red-200 p-4 text-sm text-danger"
+            className="mb-4 rounded-xl border border-danger/25 bg-danger-soft p-4 text-sm text-danger"
           >
             {preview.comparisonError}
             <button
@@ -162,7 +162,7 @@ export function ImportPreview({
           </p>
         )}
         {preview.comparison?.historical && (
-          <p className="mb-4 rounded-xl bg-amber-50 p-4 text-sm">
+          <p className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning">
             Este archivo es histórico: podrás trabajar en su fecha sin cambiar
             la BASE actual.
           </p>

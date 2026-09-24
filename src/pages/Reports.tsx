@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
 import { DecisionControls } from "@/components/treasury/DecisionControls";
 import { DecisionChart } from "@/components/treasury/DecisionChart";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
 import { DataTable } from "@/components/treasury/DataTable";
 import { LoadingState, ErrorState } from "@/components/treasury/feedback";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
@@ -114,16 +114,14 @@ export default function Reports() {
         {report.subtitle} · {report.source.fileName}. Importes en moneda
         original, sin convertir con tasas de otra fecha.
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {report.sections[0].rows.slice(0, 3).map((r, i) => (
-          <KpiCard
-            key={i}
-            label={String(r.Métrica)}
-            value={Number(r.Valor)}
-            valueText={baseNumber(Number(r.Valor)) + " " + filters.currency}
-          />
-        ))}
-      </div>
+      <BentoStats
+        items={report.sections[0].rows.slice(0, 3).map((r, i) => ({
+          key: String(i),
+          label: String(r.Métrica),
+          valueText: baseNumber(Number(r.Valor)) + " " + filters.currency,
+          subtext: i === 0 ? report.source.fileName : undefined,
+        }))}
+      />
       <SectionCard title="Proyección de caja">
         <DecisionChart
           days={report.model.days}

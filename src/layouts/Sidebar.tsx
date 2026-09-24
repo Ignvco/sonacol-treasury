@@ -86,8 +86,8 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                   cn(
                     "flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors",
                     isActive
-                      ? "bg-brand text-white shadow-sm"
-                      : "text-foreground/75 hover:bg-muted hover:text-brand",
+                      ? "bg-brand text-primary-foreground shadow-[0_8px_20px_-8px_hsl(var(--brand)/0.65)]"
+                      : "text-foreground/75 hover:bg-brand-soft hover:text-brand-dark",
                   )
                 }
               >
@@ -103,10 +103,10 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 export function Sidebar() {
   return (
-    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r bg-card lg:flex">
+    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r border-border bg-gradient-to-b from-card via-card to-sunken lg:flex">
       <NavLink
         to="/dashboard"
-        className="flex h-[84px] shrink-0 items-center border-b px-6"
+        className="flex h-[84px] shrink-0 items-center border-b border-border px-6"
       >
         <img src="/logo-sonacol.png" alt="SONACOL" className="w-[140px]" />
       </NavLink>
@@ -115,12 +115,12 @@ export function Sidebar() {
       </div>
       <NavLink
         to="/settings"
-        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border bg-muted/60 px-3 py-3 text-[13px] text-foreground/75"
+        className="mx-3 mb-4 flex items-center gap-3 rounded-xl border border-border bg-card/70 px-3 py-3 text-[13px] text-foreground/75 transition-colors hover:border-brand/40 hover:text-brand-dark"
       >
         <Settings size={18} />
         Configuración
       </NavLink>
-      <div className="border-t px-6 py-4 text-[10px] tracking-wider text-muted-foreground">
+      <div className="border-t border-border px-6 py-4 text-[10px] tracking-wider text-muted-foreground">
         SONACOL · TESORERÍA
       </div>
     </aside>
@@ -133,7 +133,7 @@ export function MobileNavigation() {
       <SheetTrigger asChild>
         <button
           aria-label="Abrir navegación"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border lg:hidden"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card lg:hidden"
         >
           <Menu size={20} />
         </button>
@@ -142,7 +142,7 @@ export function MobileNavigation() {
         side="left"
         className="flex w-[285px] flex-col overflow-y-auto p-0"
       >
-        <SheetHeader className="border-b px-6 py-5 text-left">
+        <SheetHeader className="border-b border-border px-6 py-5 text-left">
           <SheetTitle>
             <img src="/logo-sonacol.png" alt="SONACOL" className="w-36" />
           </SheetTitle>
@@ -152,7 +152,7 @@ export function MobileNavigation() {
         <NavLink
           to="/settings"
           onClick={() => setOpen(false)}
-          className="mx-6 mb-5 flex items-center gap-3 rounded-xl border p-3 text-sm"
+          className="mx-6 mb-5 flex items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm"
         >
           <Settings size={17} />
           Configuración

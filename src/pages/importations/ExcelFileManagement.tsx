@@ -48,7 +48,7 @@ export function ExcelFileManagement({
         subtitle="Elimina un archivo o vacía las importaciones. Las cifras se actualizarán con la BASE restante."
       >
         {!canDelete && (
-          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+          <p className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-3 text-sm text-warning">
             Tu cuenta no tiene habilitado el permiso «Eliminar Excel».
             Administración puede habilitarlo en Seguridad y control → Usuarios y
             permisos. Después, pulsa Actualizar permisos.
@@ -81,7 +81,7 @@ export function ExcelFileManagement({
             </select>
           </label>
           <button
-            className="t-button-secondary text-red-700"
+            className="t-button-secondary text-danger"
             disabled={unavailable || !selected}
             onClick={() => {
               if (selected && !unavailable)
@@ -91,7 +91,7 @@ export function ExcelFileManagement({
             <Trash2 size={16} /> Eliminar archivo
           </button>
           <button
-            className="t-button-secondary text-red-700"
+            className="t-button-secondary text-danger"
             disabled={unavailable}
             onClick={() => {
               if (!unavailable) onDelete(null);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, CheckCircle2, Clock3, Plus, Wallet } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Clock3, Plus, TrendingDown, Wallet } from "lucide-react";
 import { useAsyncData } from "@/hooks/use-async";
 import { useCanWrite } from "@/contexts/auth-context";
 import { useDecisionFilters } from "@/hooks/use-decision-filters";
@@ -13,9 +13,10 @@ import { workingDate } from "@/services/workingDate";
 import { cashBridge, decisionModel } from "@/financial-engine/decisions";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
 import { DecisionChart } from "@/components/treasury/DecisionChart";
 import { DecisionControls } from "@/components/treasury/DecisionControls";
+import { ToolbarChip } from "@/components/treasury/Toolbar";
 import { LoadingState, ErrorState, NoBaseState } from "@/components/treasury/feedback";
 import {
   SourceBreakdown,
@@ -94,17 +95,28 @@ export default function Today() {
           </>
         }
       />
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <DecisionControls
           {...filters}
           onCurrency={filters.setCurrency}
           onHorizon={filters.setHorizon}
         />
-        <p className="text-xs text-muted-foreground">
+        {(historical || stale) && (
+          <ToolbarChip icon={Clock3} tone="warning">
+            {historical ? "Consulta histórica" : "Revisar actualización de ERP"}
+          </ToolbarChip>
+        )}
+        <p className="ml-auto flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-muted-foreground">
           Importes originales en {currency} · corte {bundle.cutoff}
+          <Link
+            className="font-semibold text-brand hover:text-brand-dark"
+            to="/integrations"
+          >
+            Ver fuentes
+          </Link>
         </p>
       </div>
-      {!bundle.batch ? (
+      {!bundle.batch && (
         <div className="rounded-2xl border border-brand/20 bg-brand-soft p-6">
           <h2 className="font-semibold">Tu tesorería comienza con BASE</h2>
           <p className="my-2 text-sm">
@@ -115,62 +127,45 @@ export default function Today() {
             Importar BASE
           </Link>
         </div>
-      ) : (
-        <div
-          className={
-            "flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-sm " +
-            (stale ? "border-amber-200 bg-amber-50" : "bg-white")
-          }
-        >
-          <span>
-            <Clock3 className="mr-2 inline" size={16} />
-            {historical
-              ? "Consulta histórica"
-              : stale
-                ? "Revisar actualización de ERP"
-                : "Última BASE disponible"}{" "}
-            · {bundle.batch.file_name}
-          </span>
-          <Link className="font-medium text-brand" to="/integrations">
-            Ver fuentes
-          </Link>
-        </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <button
-          className="text-left"
-          onClick={() => setDetail(model.cashRows)}
-          aria-label="Caja disponible: ver movimientos"
-        >
-          <KpiCard
-            label="Caja disponible"
-            value={model.available}
-            valueText={baseNumber(model.available) + " " + currency}
-            icon={Wallet}
-            subtext="BANCO al corte · ver movimientos"
-          />
-        </button>
-        <KpiCard
-          label="Menor saldo previsto"
-          value={model.lowest.balance}
-          valueText={baseNumber(model.lowest.balance) + " " + currency}
-          subtext={model.lowest.date}
-          tone={model.lowest.balance < minimum ? "danger" : "default"}
-        />
-        <KpiCard
-          label="Primer cruce del umbral"
-          value={0}
-          valueText={model.firstRisk ?? "Sin cruce"}
-          subtext={"Umbral: " + baseNumber(minimum) + " " + currency}
-        />
-        <KpiCard
-          label="Pendientes de gestión"
-          value={workspace.tasks.filter((t) => t.status === "open").length}
-          plain
-          icon={CheckCircle2}
-          subtext={model.overdue.length + " movimientos vencidos sin resolver"}
-        />
-      </div>
+      <BentoStats
+        items={[
+          {
+            key: "available",
+            label: "Caja disponible",
+            valueText: baseNumber(model.available) + " " + currency,
+            subtext: "BANCO al corte",
+            icon: Wallet,
+            hint: "Ver movimientos",
+            onClick: () => setDetail(model.cashRows),
+          },
+          {
+            key: "lowest",
+            label: "Menor saldo previsto",
+            valueText: baseNumber(model.lowest.balance) + " " + currency,
+            subtext: "Se alcanza el " + model.lowest.date,
+            tone: model.lowest.balance < minimum ? "danger" : "default",
+            icon: TrendingDown,
+          },
+          {
+            key: "risk",
+            label: "Primer cruce del umbral",
+            valueText: model.firstRisk ?? "Sin cruce",
+            subtext: "Umbral: " + baseNumber(minimum) + " " + currency,
+            icon: Clock3,
+          },
+          {
+            key: "tasks",
+            label: "Pendientes de gestión",
+            valueText: String(
+              workspace.tasks.filter((t) => t.status === "open").length,
+            ),
+            subtext:
+              model.overdue.length + " movimientos vencidos sin resolver",
+            icon: CheckCircle2,
+          },
+        ]}
+      />
       <SectionCard
         title="Horizonte de liquidez"
         subtitle="Los vencidos pendientes se proyectan al primer día. Los vínculos evitan contar un mismo cobro dos veces."

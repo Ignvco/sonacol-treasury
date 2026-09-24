@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useLocation } from "react-router-dom";
 import { ChevronDown, LogOut } from "lucide-react";
 import { CurrencySelector } from "@/components/treasury/CurrencySelector";
+import { WorkingDateChip } from "@/components/treasury/WorkingDate";
 import { NotificationPopover } from "@/components/treasury/NotificationPopover";
 import {
   DropdownMenu,
@@ -60,19 +61,20 @@ export function TopHeader() {
   return (
     <header
       data-shell-header
-      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-6 xl:px-8"
+      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6 xl:px-8"
     >
       <div className="flex min-w-0 items-center gap-3">
         <MobileNavigation />
         <span className="hidden text-xs text-muted-foreground sm:block">
           Tesorería /
         </span>
-        <p className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+        <p className="hidden truncate text-[15px] font-semibold tracking-tight text-foreground sm:block">
           {title}
         </p>
       </div>
 
       <div className="flex items-center gap-2.5">
+        <WorkingDateChip />
         <GlobalSearch />
         <CurrencySelector className="inline-flex" />
         <NotificationPopover />

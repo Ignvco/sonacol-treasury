@@ -56,7 +56,7 @@ export function BankCard({ position, onClick }: BankCardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 border-t border-[#F1F1F1] pt-3">
+      <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
         <div>
           <p className="t-label mb-0.5">Conciliado</p>
           <p className="t-num text-[13px] font-semibold text-foreground">

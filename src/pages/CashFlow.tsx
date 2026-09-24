@@ -1,15 +1,5 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Plus } from "lucide-react";
 import { useSavedFilters } from "@/hooks/use-saved-filters";
 import { useAsyncData } from "@/hooks/use-async";
@@ -17,11 +7,13 @@ import { useProjectionView } from "@/hooks/use-projection-view";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import {
+  CashFlowBento,
+  type ChartMode,
+} from "@/components/treasury/bento/CashFlowBento";
 import { DataTable } from "@/components/treasury/DataTable";
 import { FilterBar, FilterSelect } from "@/components/treasury/FilterBar";
 import { ExportMenu } from "@/components/treasury/ExportMenu";
-import { PeriodToggle } from "@/components/treasury/charts";
 import { ProjectionControls } from "@/components/treasury/ProjectionControls";
 import { ProjectionDay } from "@/components/treasury/ProjectionDay";
 import {
@@ -40,14 +32,9 @@ import {
   type CashFlowCategory,
   type CashFlowType,
 } from "@/financial-engine/types";
-import {
-  formatDateMedium,
-  formatDateShort,
-  formatMoney,
-} from "@/financial-engine/format";
+import { formatDateMedium, formatMoney } from "@/financial-engine/format";
 import { cn } from "@/lib/utils";
 
-type ChartMode = "daily" | "weekly" | "monthly";
 interface Filters {
   from: string;
   to: string;
@@ -102,6 +89,7 @@ export default function CashFlow() {
     );
   if (loading || !banks) return <LoadingState />;
   if (!data || !model) return <NoBaseState />;
+  const variation = model.closing.final - model.available;
   const exportRows = projection.map((r) => ({
     BASE: data.batch?.file_name ?? "",
     Corte: data.cutoff,
@@ -147,7 +135,7 @@ export default function CashFlow() {
       {data.warning && (
         <p
           role="alert"
-          className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"
+          className="rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning"
         >
           {data.warning}
         </p>
@@ -156,115 +144,26 @@ export default function CashFlow() {
         <p
           key={issue}
           role="alert"
-          className="rounded-xl bg-amber-50 p-3 text-xs"
+          className="rounded-xl bg-warning-soft p-3 text-xs text-warning"
         >
           {issue}
         </p>
       ))}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Saldo Inicial"
-          value={model.available}
-          valueText={formatAmount(model.available)}
-          subtext={"BASE al " + formatDateMedium(data.cutoff)}
-        />
-        <KpiCard
-          label="Ingresos"
-          value={model.collections}
-          valueText={formatAmount(model.collections)}
-          subtext={"Próximos " + filters.horizon + " días"}
-        />
-        <KpiCard
-          label="Egresos"
-          value={model.payments}
-          valueText={formatAmount(model.payments)}
-          subtext={"Próximos " + filters.horizon + " días"}
-          tone="warning"
-        />
-        <button
-          className="min-w-0 rounded-2xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
-          onClick={() => setSelectedDay(model.to)}
-        >
-          <KpiCard
-            label={"Caja prevista al " + formatDateMedium(model.to)}
-            value={model.closing.final}
-            valueText={formatAmount(model.closing.final)}
-            subtext="Ver cálculo del día · mismo saldo de Resumen"
-            tone={model.closing.final < 0 ? "danger" : "success"}
-          />
-        </button>
-      </div>
-      <SectionCard
-        title="Proyección de Liquidez"
-        subtitle={amountDescription}
-        action={
-          <PeriodToggle<ChartMode>
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "daily", label: "Diario" },
-              { value: "weekly", label: "Semanal" },
-              { value: "monthly", label: "Mensual" },
-            ]}
-          />
-        }
-        bodyClassName="px-2 pb-3"
-      >
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={projection}
-              barGap={2}
-              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid vertical={false} stroke="#F0F0F0" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatDateShort}
-                tick={{ fontSize: 10 }}
-                minTickGap={25}
-              />
-              <YAxis
-                width={65}
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v) => formatAmount(Number(v), true)}
-              />
-              <Tooltip
-                formatter={(v, name) => [
-                  formatAmount(Number(v)),
-                  name === "income"
-                    ? "Ingresos"
-                    : name === "expense"
-                      ? "Egresos"
-                      : "Saldo",
-                ]}
-                labelFormatter={(v) => formatDateMedium(String(v))}
-              />
-              <Bar
-                dataKey="income"
-                fill="#0320A5"
-                radius={[5, 5, 0, 0]}
-                maxBarSize={22}
-              />
-              <Bar
-                dataKey="expense"
-                fill="#FF9400"
-                fillOpacity={0.85}
-                radius={[5, 5, 0, 0]}
-                maxBarSize={22}
-              />
-              <Line
-                type="stepAfter"
-                dataKey="final"
-                stroke="#0320A5"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </SectionCard>
+      <CashFlowBento
+        cutoff={data.cutoff}
+        to={model.to}
+        horizon={filters.horizon}
+        mode={mode}
+        onModeChange={setMode}
+        available={model.available}
+        projected={model.closing.final}
+        collections={model.collections}
+        payments={model.payments}
+        variation={variation}
+        projection={projection}
+        formatAmount={formatAmount}
+        onOpenDay={(date) => setSelectedDay(date)}
+      />
       <SectionCard
         title={
           mode === "daily"

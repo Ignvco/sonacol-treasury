@@ -38,14 +38,14 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-10">
-      <div className="grid w-full max-w-[880px] grid-cols-1 overflow-hidden rounded-[24px] border border-[#EAEAEA] bg-card shadow-[0_20px_60px_rgba(0,0,0,0.06)] md:grid-cols-2">
+    <div className="t-canvas flex min-h-screen w-full items-center justify-center px-4 py-10">
+      <div className="grid w-full max-w-[880px] grid-cols-1 overflow-hidden rounded-[24px] border border-border bg-card shadow-bento md:grid-cols-2">
         {/* Brand panel */}
-        <div className="relative hidden flex-col justify-between overflow-hidden bg-brand p-10 md:flex">
+        <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-brand p-10 md:flex">
           <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
           <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-white/5" />
           <div className="relative">
-            <span className="inline-flex items-center rounded-2xl bg-white px-5 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.2)]">
+            <span className="inline-flex items-center rounded-2xl bg-card px-5 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.2)]">
               <img src="/logo-sonacol.png" alt="SONACOL" className="h-6 w-auto" />
             </span>
           </div>
@@ -148,7 +148,7 @@ export default function Login() {
               : "¿Ya tienes cuenta? Inicia sesión"}
           </button>
 
-          <p className="mt-6 border-t border-[#F1F1F1] pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-6 border-t border-border pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
             Acceso a información financiera interna. Usa tu cuenta autorizada.
           </p>
         </div>

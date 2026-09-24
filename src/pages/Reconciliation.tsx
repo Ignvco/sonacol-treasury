@@ -17,6 +17,7 @@ import {
   baseNumber,
 } from "@/components/treasury/SourceBreakdown";
 import { StatementImport } from "@/components/treasury/StatementImport";
+import { ReconciliationBento } from "@/components/treasury/bento/ReconciliationBento";
 import {
   Dialog,
   DialogContent,
@@ -125,6 +126,17 @@ export default function Reconciliation() {
       r.amount,
       -Number(data?.ledgerAllocations.find((a) => a.id === r.id)?.amount ?? 0),
     ]);
+  const pendingBase = account
+      ? total(account.rows.filter((r) => r.recordId).map((r) => remaining(r)))
+      : 0,
+    pendingBank = total(
+      (data?.transactions ?? []).map((t) =>
+        total([Math.abs(t.amount), -Number(t.allocated)]),
+      ),
+    ),
+    bankTotal = total((data?.transactions ?? []).map((t) => Math.abs(t.amount))),
+    matchedBank = total([bankTotal, -pendingBank]),
+    matchedShare = bankTotal > 0 ? matchedBank / bankTotal : 0;
   return (
     <div className="grid gap-5">
       <PageHeader
@@ -199,43 +211,21 @@ export default function Reconciliation() {
           ) : (
             data && (
               <>
-                <div className="rounded-xl border bg-white p-4 text-sm">
-                  <p>
-                    Saldo BASE al {account.cutoff}:{" "}
-                    <strong>
-                      {baseNumber(account.accountingBalance)} {account.currency}
-                    </strong>
-                  </p>
-                  <p>
-                    Saldo cartola:{" "}
-                    {statement?.closing != null
-                      ? baseNumber(Number(statement.closing)) +
-                        " " +
-                        account.currency +
-                        " al " +
-                        statement.end_date
-                      : "Sin saldo informado"}
-                  </p>
-                  {statement?.closing != null &&
-                    statement.end_date === account.cutoff && (
-                      <p>
-                        Diferencia de saldos:{" "}
-                        {baseNumber(
-                          total([
-                            account.accountingBalance,
-                            -Number(statement.closing),
-                          ]),
-                        )}{" "}
-                        {account.currency}
-                      </p>
-                    )}
-                  {statement && statement.end_date !== account.cutoff && (
-                    <p className="text-xs text-muted-foreground">
-                      Cortes distintos; la diferencia de saldos no es
-                      comparable.
-                    </p>
-                  )}
-                </div>
+                <ReconciliationBento
+                  bankName={account.bankName}
+                  accountNumber={account.accountNumber}
+                  currency={account.currency}
+                  cutoff={account.cutoff}
+                  accountingBalance={account.accountingBalance}
+                  statement={statement}
+                  pendingBase={pendingBase}
+                  pendingBank={pendingBank}
+                  matchedBank={matchedBank}
+                  matchedShare={matchedShare}
+                  movementCount={data.transactions.length}
+                  suggestionCount={suggestions.length}
+                  onOpenBalance={() => setDetail(account.rows)}
+                />
                 {!!suggestions.length && (
                   <SectionCard
                     title="Coincidencias para revisar"

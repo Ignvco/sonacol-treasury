@@ -1,11 +1,14 @@
 import type { Dispatch, SetStateAction } from "react";
+import { CalendarRange, Coins, Landmark, RotateCcw } from "lucide-react";
 import {
   PROJECTION_CURRENCIES,
+  PROJECTION_DEFAULTS,
   PROJECTION_HORIZONS,
   type ProjectionFilters,
 } from "@/financial-engine/projection";
 import type { BaseBundle } from "@/services/baseTreasuryService";
 import { formatDateMedium } from "@/financial-engine/format";
+import { InfoPopover, Toolbar, ToolbarSelect } from "./Toolbar";
 
 export function ProjectionControls({
   data,
@@ -30,75 +33,83 @@ export function ProjectionControls({
       ...(filters.bank ? [filters.bank] : []),
     ]),
   ].sort();
+  const changed =
+    filters.horizon !== PROJECTION_DEFAULTS.horizon ||
+    filters.currency !== PROJECTION_DEFAULTS.currency ||
+    filters.bank !== PROJECTION_DEFAULTS.bank;
+
   return (
-    <section
-      aria-label="Contexto de proyección"
-      className="space-y-3 rounded-2xl border bg-white p-4"
-    >
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="grid gap-1 text-xs font-medium">
-          Horizonte
-          <select
-            className="t-input"
-            value={filters.horizon}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, horizon: Number(e.target.value) }))
-            }
+    <section aria-label="Contexto de proyección">
+      <Toolbar label="Contexto de proyección">
+        <ToolbarSelect
+          label="Horizonte"
+          icon={CalendarRange}
+          value={String(filters.horizon)}
+          onChange={(v) => setFilters((f) => ({ ...f, horizon: Number(v) }))}
+          options={PROJECTION_HORIZONS.map((n) => ({
+            value: String(n),
+            label: `${n} días`,
+          }))}
+        />
+        <ToolbarSelect
+          label="Valores"
+          icon={Coins}
+          value={filters.currency}
+          onChange={(v) => setFilters((f) => ({ ...f, currency: v }))}
+          options={PROJECTION_CURRENCIES.map((c) => ({
+            value: c,
+            label:
+              c === "BASE"
+                ? "Literal de BASE · todas las monedas"
+                : `Partidas ${c}`,
+          }))}
+        />
+        <ToolbarSelect
+          label="Banco"
+          icon={Landmark}
+          value={filters.bank}
+          onChange={(v) => setFilters((f) => ({ ...f, bank: v }))}
+          options={[
+            { value: "", label: "Todos los bancos" },
+            ...banks.map((b) => ({ value: b, label: b })),
+          ]}
+        />
+        {changed && (
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand"
+            onClick={reset}
           >
-            {PROJECTION_HORIZONS.map((n) => (
-              <option key={n} value={n}>
-                {n} días
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-medium">
-          Valores
-          <select
-            className="t-input max-w-full"
-            value={filters.currency}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, currency: e.target.value }))
-            }
-          >
-            {PROJECTION_CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c === "BASE"
-                  ? "Literal de BASE · todas las monedas"
-                  : `Partidas ${c}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid min-w-0 gap-1 text-xs font-medium">
-          Banco
-          <select
-            className="t-input max-w-full"
-            value={filters.bank}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, bank: e.target.value }))
-            }
-          >
-            <option value="">Todos los bancos</option>
-            {banks.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="t-button-secondary" onClick={reset}>
-          Restablecer
-        </button>
-      </div>
-      <p className="text-sm" data-testid="projection-period">
-        BASE al <strong>{formatDateMedium(data.cutoff)}</strong> · Proyección
-        del {formatDateMedium(from)} al <strong>{formatDateMedium(to)}</strong>
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {amountDescription} Los filtros se comparten entre Resumen y Flujo de
-        caja.
-      </p>
+            <RotateCcw size={14} strokeWidth={2} />
+            Restablecer
+          </button>
+        )}
+        <p
+          data-testid="projection-period"
+          className="ml-auto text-[11.5px] leading-snug text-muted-foreground"
+        >
+          BASE al{" "}
+          <strong className="font-semibold text-foreground/75">
+            {formatDateMedium(data.cutoff)}
+          </strong>{" "}
+          · Proyección del{" "}
+          <strong className="font-semibold text-foreground/75">
+            {formatDateMedium(from)}
+          </strong>{" "}
+          al{" "}
+          <strong className="font-semibold text-foreground/75">
+            {formatDateMedium(to)}
+          </strong>
+        </p>
+        <InfoPopover
+          label="Cómo se calculan las cifras"
+          className="order-first sm:order-none"
+        >
+          <p>
+            {amountDescription} Los filtros se comparten entre Resumen y Flujo
+            de caja.
+          </p>
+        </InfoPopover>
+      </Toolbar>
     </section>
   );
 }

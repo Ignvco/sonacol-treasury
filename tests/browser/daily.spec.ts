@@ -6,6 +6,14 @@ import * as XLSX from "xlsx";
 const writer = "10000000-0000-0000-0000-000000000001",
   reader = "10000000-0000-0000-0000-000000000002";
 const setup = setupDatabaseBrowser;
+/** The working date lives in the shell header as a chip with a version menu. */
+async function pickWorkingDate(page: Page, option: RegExp) {
+  await page.getByRole("button", { name: "Fecha de trabajo" }).click();
+  await page
+    .getByTestId("working-date-menu")
+    .getByRole("button", { name: option })
+    .click();
+}
 function workbook(day = 12, amount = 45000) {
   const sheet = XLSX.utils.aoa_to_sheet(Array.from({ length: 7 }, () => []));
   sheet.AE7 = { t: "d", v: new Date(Date.UTC(2026, 8, day)) };
@@ -184,9 +192,7 @@ test("daily workflow uses real SQL: two different workbooks, editable MANUAL, hi
     ).toBeVisible();
     await page.goto("/projections");
     await expect(page.getByText("−240 CLP", { exact: true })).toBeVisible();
-    await page
-      .getByRole("combobox", { name: "Fecha de trabajo", exact: true })
-      .selectOption({ label: "2026-09-12 · day-one.xlsx" });
+    await pickWorkingDate(page, /day-one\.xlsx/);
     await page
       .getByRole("button", { name: "Editar Pago manual", exact: true })
       .click();
@@ -197,9 +203,7 @@ test("daily workflow uses real SQL: two different workbooks, editable MANUAL, hi
     await expect(page.getByText("−333 CLP", { exact: true })).toBeVisible();
     await page.reload();
     await expect(page.getByText("−333 CLP", { exact: true })).toBeVisible();
-    await page
-      .getByRole("combobox", { name: "Fecha de trabajo", exact: true })
-      .selectOption("");
+    await pickWorkingDate(page, /Última BASE disponible/);
     await expect(page.getByText("−240 CLP", { exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/reconciliation");
@@ -263,9 +267,10 @@ test("deleting Excel updates cash, history, MANUAL and reconciliation; the same 
   try {
     await upload(page, "first.xlsx", 12, 45000);
     await upload(page, "second.xlsx", 13, 47000);
-    const selected = await page
-      .getByRole("combobox", { name: "Fecha de trabajo", exact: true })
-      .inputValue();
+    const selected = await page.evaluate(
+      (user) => localStorage.getItem("sonacol.working-date:" + user) ?? "",
+      writer,
+    );
     await page
       .getByRole("button", { name: "Eliminar second.xlsx", exact: true })
       .click();
@@ -307,8 +312,8 @@ test("deleting Excel updates cash, history, MANUAL and reconciliation; the same 
       page.getByRole("button", { name: /Caja disponible.*45.000/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("combobox", { name: "Fecha de trabajo", exact: true }),
-    ).toHaveValue("");
+      page.getByRole("button", { name: "Fecha de trabajo" }),
+    ).toContainText("Última BASE");
     await page.goto("/importations");
     await page.setViewportSize({ width: 390, height: 844 });
     await page

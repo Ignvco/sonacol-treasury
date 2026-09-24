@@ -115,7 +115,7 @@ export function AccessGate() {
   const { user, refreshProfile, signOut } = useAuth();
   const [error, setError] = useState("");
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-50 p-4">
+    <main className="t-canvas flex min-h-dvh items-center justify-center p-4">
       <div className="t-card grid w-full max-w-md gap-5 p-7">
         <ShieldCheck className="text-brand" size={32} />
         <h1 className="text-xl font-semibold">

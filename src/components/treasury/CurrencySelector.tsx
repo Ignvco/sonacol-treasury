@@ -20,7 +20,7 @@ export function CurrencySelector({ className }: { className?: string }) {
         <button
           aria-label="Moneda de visualización"
           className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#EAEAEA] bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand",
+            "inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand",
             className,
           )}
         >
@@ -49,7 +49,7 @@ export function CurrencySelector({ className }: { className?: string }) {
             </button>
           ))}
         </div>
-        <p className="mt-2 border-t border-[#EAEAEA] px-2 pb-1 pt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 border-t border-border px-2 pb-1 pt-2 text-[11px] text-muted-foreground">
           Conversión con las tasas configuradas. Las monedas sin tasa están deshabilitadas.
         </p>
       </PopoverContent>

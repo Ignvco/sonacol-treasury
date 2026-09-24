@@ -1,3 +1,6 @@
+import { CalendarRange, Coins } from "lucide-react";
+import { Toolbar, ToolbarSelect } from "./Toolbar";
+
 export function DecisionControls({
   currency,
   horizon,
@@ -10,33 +13,27 @@ export function DecisionControls({
   onHorizon: (v: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-3">
-      <label className="grid gap-1 text-xs text-muted-foreground">
-        Moneda de cálculo
-        <select
-          className="t-input"
-          value={currency}
-          onChange={(e) => onCurrency(e.target.value)}
-        >
-          {["CLP", "USD", "UF", "UTM"].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </label>
-      <label className="grid gap-1 text-xs text-muted-foreground">
-        Horizonte
-        <select
-          className="t-input"
-          value={horizon}
-          onChange={(e) => onHorizon(Number(e.target.value))}
-        >
-          {[7, 30, 60, 90, 180, 365].map((d) => (
-            <option key={d} value={d}>
-              {d} días
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
+    <Toolbar label="Contexto de cálculo">
+      <ToolbarSelect
+        label="Moneda de cálculo"
+        icon={Coins}
+        value={currency}
+        onChange={onCurrency}
+        options={["CLP", "USD", "UF", "UTM"].map((c) => ({
+          value: c,
+          label: c,
+        }))}
+      />
+      <ToolbarSelect
+        label="Horizonte"
+        icon={CalendarRange}
+        value={String(horizon)}
+        onChange={(v) => onHorizon(Number(v))}
+        options={[7, 30, 60, 90, 180, 365].map((d) => ({
+          value: String(d),
+          label: `${d} días`,
+        }))}
+      />
+    </Toolbar>
   );
 }

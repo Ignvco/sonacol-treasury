@@ -10,7 +10,8 @@ import {
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { DataTable } from "@/components/treasury/DataTable";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
+import { ArrowLeftRight, Wallet } from "lucide-react";
 import { LoadingState, ErrorState } from "@/components/treasury/feedback";
 import {
   SourceBreakdown,
@@ -99,20 +100,36 @@ export default function Changes() {
         </p>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              ["Caja inicial", bridge.opening],
-              ["Variación", bridge.difference],
-              ["Caja final", bridge.closing],
-            ].map(([name, value]) => (
-              <KpiCard
-                key={String(name)}
-                label={String(name)}
-                value={Number(value)}
-                valueText={baseNumber(Number(value)) + " " + currency}
-              />
-            ))}
-          </div>
+          <BentoStats
+            items={[
+              {
+                key: "closing",
+                label: "Caja final",
+                valueText: baseNumber(bridge.closing) + " " + currency,
+                subtext: "Saldo al cierre de la segunda BASE",
+                icon: Wallet,
+                delta:
+                  bridge.opening !== 0
+                    ? (bridge.difference / Math.abs(bridge.opening)) * 100
+                    : null,
+              },
+              {
+                key: "opening",
+                label: "Caja inicial",
+                valueText: baseNumber(bridge.opening) + " " + currency,
+                subtext: "Saldo al cierre de la primera BASE",
+                icon: Wallet,
+              },
+              {
+                key: "difference",
+                label: "Variación",
+                valueText: baseNumber(bridge.difference) + " " + currency,
+                subtext: "Cierre − apertura entre ambas BASE",
+                tone: bridge.difference < 0 ? "danger" : "success",
+                icon: ArrowLeftRight,
+              },
+            ]}
+          />
           <SectionCard
             title="Cambios en los movimientos"
             subtitle="Una baja indica que la fila falta en la segunda BASE. No implica pago ni conciliación."

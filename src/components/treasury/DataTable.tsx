@@ -129,10 +129,10 @@ export function DataTable<T>({
   return (
     <div className="flex flex-col">
       <details className="mb-3 self-end text-xs">
-        <summary className="cursor-pointer rounded-lg border bg-white px-3 py-2">
+        <summary className="cursor-pointer rounded-lg border bg-card px-3 py-2">
           Vista de tabla
         </summary>
-        <div className="mt-2 flex flex-wrap gap-3 rounded-xl border bg-white p-3">
+        <div className="mt-2 flex flex-wrap gap-3 rounded-xl border bg-card p-3">
           <label>
             Densidad{" "}
             <select
@@ -187,10 +187,10 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="max-h-[560px] max-w-full overflow-auto rounded-[16px] border border-[#EAEAEA]">
+      <div className="max-h-[560px] max-w-full overflow-auto rounded-[16px] border border-border">
         <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-slate-50 shadow-sm">
-            <tr className="border-b border-[#EAEAEA]">
+          <thead className="sticky top-0 z-10 bg-sunken shadow-sm">
+            <tr className="border-b border-border">
               {shown.map((col) => (
                 <th
                   key={col.key}
@@ -254,7 +254,7 @@ export function DataTable<T>({
                   }
                 }}
                 className={cn(
-                  "border-b border-[#F1F1F1] last:border-0",
+                  "border-b border-border last:border-0",
                   onRowClick && "cursor-pointer",
                   "transition-colors hover:bg-brand-soft/40",
                 )}

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, X } from "lucide-react";
+import { CalendarClock, CalendarRange, Percent, PiggyBank, Wallet, X } from "lucide-react";
 import { useAsyncData } from "@/hooks/use-async";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
 import { DataTable } from "@/components/treasury/DataTable";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
 import { ExportMenu } from "@/components/treasury/ExportMenu";
@@ -79,21 +79,46 @@ export default function Investments() {
         actions={<ExportMenu rows={exportRows} filename="inversiones" />}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total invertido" value={summary.total} subtext="Colocaciones + fondos mutuos" icon={undefined} />
-        <KpiCard
-          label="Por vencer (30 días)"
-          value={summary.dueSoonAmount}
-          subtext={summary.dueSoonCount > 0 ? `${summary.dueSoonCount} inversiones` : "Sin vencimientos próximos"}
-          tone={summary.dueSoonCount > 0 ? "warning" : "success"}
-        />
-        <KpiCard label="Intereses estimados" value={summary.interest} valueText={summary.unknownInterest ? "No disponible" : undefined} subtext={summary.unknownInterest ? `${summary.unknownInterest} inversiones sin tasa informada` : "Al vencimiento"} />
-        <KpiCard
-          label="Liquidez disponible"
-          value={dashboard?.kpis.availableCash ?? 0}
-          subtext="Caja en bancos"
-        />
-      </div>
+      <BentoStats
+        items={[
+          {
+            key: "total",
+            label: "Total invertido",
+            valueText: money(summary.total),
+            subtext: "Colocaciones + fondos mutuos vigentes",
+            icon: PiggyBank,
+          },
+          {
+            key: "dueSoon",
+            label: "Por vencer (30 días)",
+            valueText: money(summary.dueSoonAmount),
+            subtext:
+              summary.dueSoonCount > 0
+                ? `${summary.dueSoonCount} inversiones`
+                : "Sin vencimientos próximos",
+            tone: summary.dueSoonCount > 0 ? "warning" : "success",
+            icon: CalendarClock,
+          },
+          {
+            key: "interest",
+            label: "Intereses estimados",
+            valueText: summary.unknownInterest
+              ? "No disponible"
+              : money(summary.interest),
+            subtext: summary.unknownInterest
+              ? `${summary.unknownInterest} inversiones sin tasa informada`
+              : "Al vencimiento",
+            icon: Percent,
+          },
+          {
+            key: "liquidity",
+            label: "Liquidez disponible",
+            valueText: money(dashboard?.kpis.availableCash ?? 0),
+            subtext: "Caja en bancos",
+            icon: Wallet,
+          },
+        ]}
+      />
 
       {/* Maturity timeline */}
       <SectionCard
@@ -118,7 +143,7 @@ export default function Investments() {
                 </div>
                 <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className={cn("h-full rounded-full", isSoon ? "bg-warning" : i.status === "rescate_programado" ? "bg-info" : "bg-brand")}
+                    className={cn("h-full rounded-full", isSoon ? "bg-warning-vivid" : i.status === "rescate_programado" ? "bg-info-vivid" : "bg-brand")}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -202,7 +227,7 @@ export default function Investments() {
                 <InvestDetail label="Tasa anual" value={selected.rateKnown === false ? "No informada" : `${selected.rate.toFixed(1)}%`} />
                 <InvestDetail label="Interés estimado" value={selected.rateKnown === false ? "No informado" : money(selected.estimatedInterest)} />
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-[#EAEAEA] px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
                 <span className="text-[12px] text-muted-foreground">Estado</span>
                 <StatusBadge label={INVESTMENT_STATUS_LABEL[selected.status]} />
               </div>
@@ -219,7 +244,7 @@ export default function Investments() {
 
 function InvestDetail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[#EAEAEA] p-3.5">
+    <div className="rounded-2xl border border-border p-3.5">
       <p className="t-label mb-1">{label}</p>
       <p className="text-[13px] font-semibold text-foreground">{value}</p>
     </div>

@@ -169,8 +169,8 @@ test("Configuration selects one BASE globally, keeps history on reload, and late
       .getByRole("combobox", { name: "BASE de consulta", exact: true })
       .selectOption(b.id);
     await expect(
-      page.getByRole("combobox", { name: "Fecha de trabajo", exact: true }),
-    ).toHaveValue(b.id);
+      page.getByRole("button", { name: "Fecha de trabajo" }),
+    ).toContainText(/18 sept/);
     await page.goto("/dashboard");
     await expectClosing(page, "1.100");
     await page.reload();

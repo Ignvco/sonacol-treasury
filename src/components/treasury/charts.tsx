@@ -23,7 +23,7 @@ export function ChartTooltip({
     available: "Disponible",
   };
   return (
-    <div className="rounded-xl border border-[#EAEAEA] bg-card px-3 py-2.5 shadow-soft">
+    <div className="rounded-xl border border-border bg-card px-3 py-2.5 shadow-soft">
       {label && <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{label}</p>}
       <div className="flex flex-col gap-1">
         {payload

@@ -38,7 +38,7 @@ export function DateRangePicker({ value, onChange, compact }: DateRangePickerPro
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-xl border border-[#EAEAEA] bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand",
+            "inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand",
             compact && "h-8",
           )}
         >
@@ -70,7 +70,7 @@ export function DateRangePicker({ value, onChange, compact }: DateRangePickerPro
             </button>
           ))}
         </div>
-        <div className="mt-2 flex items-center gap-1.5 border-t border-[#EAEAEA] px-2 pb-1 pt-2.5">
+        <div className="mt-2 flex items-center gap-1.5 border-t border-border px-2 pb-1 pt-2.5">
           <input
             type="date"
             aria-label="Fecha desde"

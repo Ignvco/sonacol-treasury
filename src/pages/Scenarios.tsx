@@ -16,7 +16,8 @@ import {
 import { sourceKey, type TreasuryRow } from "@/financial-engine/base-treasury";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { BentoStats } from "@/components/treasury/bento/BentoStats";
+import { ArrowLeftRight, CalendarX, TrendingDown } from "lucide-react";
 import { DecisionChart } from "@/components/treasury/DecisionChart";
 import { DecisionControls } from "@/components/treasury/DecisionControls";
 import { DataTable } from "@/components/treasury/DataTable";
@@ -241,32 +242,40 @@ export default function Scenarios() {
               </p>
             )}
           </SectionCard>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Saldo mínimo del escenario"
-              value={model.minimum}
-              valueText={baseNumber(model.minimum) + " " + context.currency}
-            />
-            <KpiCard
-              label="Variación del saldo final"
-              value={model.projected - reference.projected}
-              valueText={
-                baseNumber(model.projected - reference.projected) +
-                " " +
-                context.currency
-              }
-            />
-            <KpiCard
-              label="Días bajo el umbral"
-              value={model.daysBelow}
-              plain
-              subtext={
-                model.firstRisk
+          <BentoStats
+            items={[
+              {
+                key: "minimum",
+                label: "Saldo mínimo del escenario",
+                valueText: baseNumber(model.minimum) + " " + context.currency,
+                subtext: "Punto más bajo dentro del horizonte simulado",
+                icon: TrendingDown,
+              },
+              {
+                key: "variation",
+                label: "Variación del saldo final",
+                valueText:
+                  baseNumber(model.projected - reference.projected) +
+                  " " +
+                  context.currency,
+                subtext: "Escenario frente a la previsión sin cambios",
+                tone:
+                  model.projected - reference.projected < 0
+                    ? "danger"
+                    : "success",
+                icon: ArrowLeftRight,
+              },
+              {
+                key: "below",
+                label: "Días bajo el umbral",
+                valueText: String(model.daysBelow),
+                subtext: model.firstRisk
                   ? "Primer cruce: " + model.firstRisk
-                  : "Sin cruces"
-              }
-            />
-          </div>
+                  : "Sin cruces",
+                icon: CalendarX,
+              },
+            ]}
+          />
           <SectionCard
             title="Escenario frente a la referencia"
             subtitle="Línea azul: escenario. Línea discontinua: previsión sin cambios."

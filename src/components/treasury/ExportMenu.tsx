@@ -63,7 +63,7 @@ export function ExportMenu({
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-xl border border-[#EAEAEA] bg-card px-3.5 text-[13px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand",
+            "inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-card px-3.5 text-[13px] font-semibold text-foreground transition-colors hover:border-brand/40 hover:text-brand",
             className,
           )}
         >

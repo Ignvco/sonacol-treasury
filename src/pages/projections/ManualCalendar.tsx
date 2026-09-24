@@ -85,8 +85,8 @@ export function ManualCalendar({
             className={
               "min-h-28 rounded-xl border p-2 " +
               (day.slice(0, 7) === anchor.slice(0, 7)
-                ? "bg-white"
-                : "bg-slate-50")
+                ? "bg-card"
+                : "bg-sunken")
             }
             onDragOver={(e) => {
               if (canWrite) e.preventDefault();
@@ -121,7 +121,7 @@ export function ManualCalendar({
                     "mb-1 w-full rounded-lg border-l-2 p-2 text-left text-xs " +
                     (p.type === "expense"
                       ? "border-rose-400 bg-rose-50"
-                      : "border-blue-500 bg-blue-50")
+                      : "border-brand bg-brand-soft")
                   }
                 >
                   <p className="line-clamp-2 font-medium">{p.description}</p>

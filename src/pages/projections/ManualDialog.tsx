@@ -506,7 +506,7 @@ export function ManualDialog({
             {state.data?.workspace.comments
               .filter((c) => c.manual_id === initial!.id)
               .map((c) => (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm" key={c.id}>
+                <div className="rounded-xl bg-sunken p-3 text-sm" key={c.id}>
                   <p className="whitespace-pre-wrap">{c.body}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {state.data?.members.find((m) => m.id === c.author)?.name ??

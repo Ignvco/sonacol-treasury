@@ -10,7 +10,7 @@ export function ReadingProfileSummary({
   return (
     <section
       aria-label="Estructura de Excel reconocida"
-      className="mb-4 rounded-xl border bg-slate-50 p-4 text-sm"
+      className="mb-4 rounded-xl border bg-sunken p-4 text-sm"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold">

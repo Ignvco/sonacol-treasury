@@ -1,6 +1,6 @@
 import { ManualCalendar } from "./projections/ManualCalendar";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Copy } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAsyncData } from "@/hooks/use-async";
 import { useCanWrite } from "@/contexts/auth-context";
@@ -10,7 +10,7 @@ import { baseTreasuryService } from "@/services/baseTreasuryService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
 import { DataTable } from "@/components/treasury/DataTable";
-import { KpiCard } from "@/components/treasury/KpiCard";
+import { ProjectionsBento } from "@/components/treasury/bento/ProjectionsBento";
 import { StatusBadge } from "@/components/treasury/StatusBadge";
 import { LoadingState, ErrorState, NoBaseState } from "@/components/treasury/feedback";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
@@ -28,6 +28,10 @@ import {
 import { amountInClp } from "@/financial-engine/currency";
 import { total } from "@/financial-engine/base-treasury";
 import { ManualDialog } from "./projections/ManualDialog";
+
+/** Statuses that stay out of the horizon figures. */
+const INACTIVE = ["cancelado", "borrador"];
+
 export default function Projections() {
   const { data, loading, error } = useAsyncData(async () => {
     const bundle = await baseTreasuryService.load();
@@ -48,10 +52,15 @@ export default function Projections() {
     setEditing(undefined);
     setDeleting(null);
   }, [data?.bundle.batch?.id]);
+  const activeCount = useMemo(
+    () =>
+      (data?.items ?? []).filter((p) => !INACTIVE.includes(p.status)).length,
+    [data],
+  );
   const summary = useMemo(() => {
     try {
       const active = (data?.items ?? []).filter(
-        (p) => !["cancelado", "borrador"].includes(p.status),
+        (p) => !INACTIVE.includes(p.status),
       );
       const income = total(
         active
@@ -63,7 +72,26 @@ export default function Projections() {
           .filter((p) => p.type === "expense")
           .map((p) => amountInClp(p.amount, p.currency, rates)),
       );
-      return { income, expense };
+      let running = 0;
+      const curve: { date: string; net: number }[] = [];
+      for (const p of [...active].sort((a, b) => a.date.localeCompare(b.date))) {
+        running +=
+          (p.type === "expense" ? -1 : 1) *
+          amountInClp(p.amount, p.currency, rates);
+        const last = curve[curve.length - 1];
+        if (last && last.date === p.date) last.net = running;
+        else curve.push({ date: p.date, net: running });
+      }
+      const cutoff = data?.bundle.cutoff;
+      if (cutoff && curve.length && cutoff < curve[0].date)
+        curve.unshift({ date: cutoff, net: 0 });
+      return {
+        income,
+        expense,
+        curve,
+        count: active.length,
+        lastDate: curve.length ? curve[curve.length - 1].date : undefined,
+      };
     } catch {
       return null;
     }
@@ -107,46 +135,20 @@ export default function Projections() {
           ) : undefined
         }
       />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <KpiCard
-          label="Ingresos proyectados"
-          value={summary?.income ?? 0}
-          valueText={!summary ? "Falta tasa de cambio" : undefined}
-        />
-        <KpiCard
-          label="Egresos proyectados"
-          value={summary?.expense ?? 0}
-          valueText={!summary ? "Falta tasa de cambio" : undefined}
-        />
-        <KpiCard
-          label="Neto proyectado"
-          value={(summary?.income ?? 0) - (summary?.expense ?? 0)}
-          valueText={!summary ? "Falta tasa de cambio" : undefined}
-        />
-      </div>
+      <ProjectionsBento
+        cutoff={bundle.cutoff}
+        view={view}
+        onViewChange={setView}
+        count={summary?.count ?? activeCount}
+        lastDate={summary?.lastDate}
+        summary={summary}
+        curve={summary?.curve ?? []}
+      />
       {!bundle.batch && (
         <p className="rounded-xl border p-4 text-sm">
           Carga tu primera BASE en Importaciones para comenzar.
         </p>
       )}
-      <div className="flex gap-2">
-        <button
-          className={
-            view === "table" ? "t-button-primary" : "t-button-secondary"
-          }
-          onClick={() => setView("table")}
-        >
-          Tabla
-        </button>
-        <button
-          className={
-            view === "calendar" ? "t-button-primary" : "t-button-secondary"
-          }
-          onClick={() => setView("calendar")}
-        >
-          Agenda visual
-        </button>
-      </div>
       <SectionCard
         title="Movimientos"
         subtitle="Los importes de la tabla y del editor están expresados en su moneda original."
