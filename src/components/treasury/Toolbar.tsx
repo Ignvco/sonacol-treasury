@@ -1,12 +1,23 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ChevronDown, Info } from "lucide-react";
+import { CalendarDays, ChevronDown, Info } from "lucide-react";
+import { es } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { formatDateMedium } from "@/financial-engine/format";
 import { cn } from "@/lib/utils";
+
+/** Local-time ISO helpers: the calendar works with dates, the engine with days. */
+const parseIso = (iso: string) => new Date(`${iso}T12:00:00`);
+const toIso = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 
 /**
  * One-line control row. The controls read as pills instead of stacked labels,
@@ -84,8 +95,73 @@ export function ToolbarSelect({
   );
 }
 
-/** Static pill for context that cannot be chosen (period, cut-off, warning). */
-export function ToolbarChip({
+/**
+ * Pill that opens a real calendar: picking a day is the exact way to choose how
+ * far the projection runs, instead of counting days.
+ */
+export function ToolbarDate({
+  label,
+  value,
+  min,
+  max,
+  onSelect,
+  hint,
+  className,
+}: {
+  label: string;
+  value: string;
+  min: string;
+  max: string;
+  onSelect: (iso: string) => void;
+  hint?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = parseIso(value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button aria-label={label} className={cn(PILL, className)}>
+          <CalendarDays
+            size={15}
+            strokeWidth={1.9}
+            className="shrink-0 text-muted-foreground"
+          />
+          <span className="truncate">Hasta {formatDateMedium(value)}</span>
+          <ChevronDown
+            size={13}
+            className="pointer-events-none absolute right-2.5 text-muted-foreground"
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        data-testid="toolbar-date-menu"
+        className="w-auto p-1"
+      >
+        <Calendar
+          mode="single"
+          locale={es}
+          selected={selected}
+          defaultMonth={selected}
+          disabled={{ before: parseIso(min), after: parseIso(max) }}
+          onSelect={(date) => {
+            if (!date) return;
+            onSelect(toIso(date));
+            setOpen(false);
+          }}
+        />
+        {hint && (
+          <p className="max-w-[17rem] px-3 pb-2 pt-1 text-[11px] leading-snug text-muted-foreground">
+            {hint}
+          </p>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Static pill for context that cannot be chosen (period, cut-off, warning). */export function ToolbarChip({
   icon: Icon,
   tone = "default",
   children,

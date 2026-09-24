@@ -107,6 +107,7 @@ export default function Reports() {
       />
       <DecisionControls
         {...filters}
+        cutoff={bundle.cutoff}
         onCurrency={filters.setCurrency}
         onHorizon={filters.setHorizon}
       />

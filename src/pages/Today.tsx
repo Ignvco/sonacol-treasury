@@ -98,6 +98,7 @@ export default function Today() {
       <div className="flex flex-wrap items-center gap-2">
         <DecisionControls
           {...filters}
+          cutoff={bundle.cutoff}
           onCurrency={filters.setCurrency}
           onHorizon={filters.setHorizon}
         />

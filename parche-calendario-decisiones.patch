@@ -1,0 +1,143 @@
+diff --git a/src/components/treasury/DecisionControls.tsx b/src/components/treasury/DecisionControls.tsx
+index 3a1e52f..01ca68a 100644
+--- a/src/components/treasury/DecisionControls.tsx
++++ b/src/components/treasury/DecisionControls.tsx
+@@ -1,12 +1,22 @@
+ import { CalendarRange, Coins } from "lucide-react";
+-import { Toolbar, ToolbarSelect } from "./Toolbar";
++import { nextDate } from "@/financial-engine/base-treasury";
++import {
++  PROJECTION_HORIZON_MAX,
++  horizonOptions,
++} from "@/financial-engine/projection";
++import { daysUntil } from "@/financial-engine/format";
++import { DECISION_HORIZONS } from "@/hooks/use-decision-filters";
++import { Toolbar, ToolbarDate, ToolbarSelect } from "./Toolbar";
+ 
+ export function DecisionControls({
++  cutoff,
+   currency,
+   horizon,
+   onCurrency,
+   onHorizon,
+ }: {
++  /** Accounting cutoff: the projection starts the next day and runs from here. */
++  cutoff: string;
+   currency: string;
+   horizon: number;
+   onCurrency: (v: string) => void;
+@@ -29,10 +39,15 @@ export function DecisionControls({
+         icon={CalendarRange}
+         value={String(horizon)}
+         onChange={(v) => onHorizon(Number(v))}
+-        options={[7, 30, 60, 90, 180, 365].map((d) => ({
+-          value: String(d),
+-          label: `${d} días`,
+-        }))}
++        options={horizonOptions(horizon, DECISION_HORIZONS)}
++      />
++      <ToolbarDate
++        label="Fecha de proyección"
++        value={nextDate(cutoff, horizon)}
++        min={nextDate(cutoff, 1)}
++        max={nextDate(cutoff, PROJECTION_HORIZON_MAX)}
++        onSelect={(iso) => onHorizon(daysUntil(iso, cutoff))}
++        hint={`Proyección diaria desde el corte hasta el día elegido. El motor llega hasta ${PROJECTION_HORIZON_MAX} días después del corte.`}
+       />
+     </Toolbar>
+   );
+diff --git a/src/financial-engine/projection.ts b/src/financial-engine/projection.ts
+index 486fde7..34f3f31 100644
+--- a/src/financial-engine/projection.ts
++++ b/src/financial-engine/projection.ts
+@@ -31,6 +31,17 @@ export function projectionHorizon(value: unknown): number {
+     : PROJECTION_DEFAULTS.horizon;
+ }
+ 
++/** Select options for a horizon: the presets plus the exact day count in use. */
++export function horizonOptions(current: number, presets: readonly number[]) {
++  const options = presets.map((n) => ({
++    value: String(n),
++    label: `${n} días`,
++  }));
++  return (presets as readonly number[]).includes(current)
++    ? options
++    : [...options, { value: String(current), label: `${current} días` }];
++}
++
+ export function projectionFilters(value: ProjectionFilters): ProjectionFilters {
+   // A saved preference can never supply the accounting cutoff.
+   return {
+diff --git a/src/hooks/use-decision-filters.ts b/src/hooks/use-decision-filters.ts
+index c233489..018a185 100644
+--- a/src/hooks/use-decision-filters.ts
++++ b/src/hooks/use-decision-filters.ts
+@@ -1,4 +1,9 @@
++import { projectionHorizon } from "@/financial-engine/projection";
+ import { useSavedFilters } from "./use-saved-filters";
++
++/** Presets offered in the decision screens; the date picker sets any other day. */
++export const DECISION_HORIZONS = [7, 30, 60, 90, 180, 365];
++
+ export function useDecisionFilters() {
+   const [saved, setSaved] = useSavedFilters("decision-context", {
+     currency: "CLP",
+@@ -7,9 +12,7 @@ export function useDecisionFilters() {
+   const currency = ["CLP", "USD", "UF", "UTM"].includes(saved.currency)
+       ? saved.currency
+       : "CLP",
+-    horizon = [7, 30, 60, 90, 180, 365].includes(saved.horizon)
+-      ? saved.horizon
+-      : 30;
++    horizon = projectionHorizon(saved.horizon);
+   return {
+     currency,
+     horizon,
+diff --git a/src/pages/Assistant.tsx b/src/pages/Assistant.tsx
+index 510e0b5..2580b56 100644
+--- a/src/pages/Assistant.tsx
++++ b/src/pages/Assistant.tsx
+@@ -71,6 +71,7 @@ export default function Assistant() {
+       />
+       <DecisionControls
+         {...filters}
++        cutoff={bundle.cutoff}
+         onCurrency={filters.setCurrency}
+         onHorizon={filters.setHorizon}
+       />
+diff --git a/src/pages/Reports.tsx b/src/pages/Reports.tsx
+index 06a3b56..63af47e 100644
+--- a/src/pages/Reports.tsx
++++ b/src/pages/Reports.tsx
+@@ -107,6 +107,7 @@ export default function Reports() {
+       />
+       <DecisionControls
+         {...filters}
++        cutoff={bundle.cutoff}
+         onCurrency={filters.setCurrency}
+         onHorizon={filters.setHorizon}
+       />
+diff --git a/src/pages/Scenarios.tsx b/src/pages/Scenarios.tsx
+index 8775f9e..461f7db 100644
+--- a/src/pages/Scenarios.tsx
++++ b/src/pages/Scenarios.tsx
+@@ -157,6 +157,7 @@ export default function Scenarios() {
+                 />
+               </label>
+               <DecisionControls
++                cutoff={safeContext.cutoff}
+                 currency={context.currency}
+                 horizon={context.horizon}
+                 onCurrency={(currency) =>
+diff --git a/src/pages/Today.tsx b/src/pages/Today.tsx
+index ec058f7..5693b48 100644
+--- a/src/pages/Today.tsx
++++ b/src/pages/Today.tsx
+@@ -98,6 +98,7 @@ export default function Today() {
+       <div className="flex flex-wrap items-center gap-2">
+         <DecisionControls
+           {...filters}
++          cutoff={bundle.cutoff}
+           onCurrency={filters.setCurrency}
+           onHorizon={filters.setHorizon}
+         />

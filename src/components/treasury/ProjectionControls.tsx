@@ -1,14 +1,17 @@
 import type { Dispatch, SetStateAction } from "react";
+import { useMemo } from "react";
 import { CalendarRange, Coins, Landmark, RotateCcw } from "lucide-react";
 import {
   PROJECTION_CURRENCIES,
   PROJECTION_DEFAULTS,
+  PROJECTION_HORIZON_MAX,
   PROJECTION_HORIZONS,
   type ProjectionFilters,
 } from "@/financial-engine/projection";
+import { nextDate } from "@/financial-engine/base-treasury";
+import { daysUntil, formatDateMedium } from "@/financial-engine/format";
 import type { BaseBundle } from "@/services/baseTreasuryService";
-import { formatDateMedium } from "@/financial-engine/format";
-import { InfoPopover, Toolbar, ToolbarSelect } from "./Toolbar";
+import { InfoPopover, Toolbar, ToolbarDate, ToolbarSelect } from "./Toolbar";
 
 export function ProjectionControls({
   data,
@@ -37,6 +40,16 @@ export function ProjectionControls({
     filters.horizon !== PROJECTION_DEFAULTS.horizon ||
     filters.currency !== PROJECTION_DEFAULTS.currency ||
     filters.bank !== PROJECTION_DEFAULTS.bank;
+  // A picked date is a horizon like any other: it just is not one of the presets.
+  const horizons = useMemo(() => {
+    const presets = PROJECTION_HORIZONS.map((n) => ({
+      value: String(n),
+      label: `${n} días`,
+    }));
+    return (PROJECTION_HORIZONS as readonly number[]).includes(filters.horizon)
+      ? presets
+      : [...presets, { value: String(filters.horizon), label: `${filters.horizon} días` }];
+  }, [filters.horizon]);
 
   return (
     <section aria-label="Contexto de proyección">
@@ -46,10 +59,17 @@ export function ProjectionControls({
           icon={CalendarRange}
           value={String(filters.horizon)}
           onChange={(v) => setFilters((f) => ({ ...f, horizon: Number(v) }))}
-          options={PROJECTION_HORIZONS.map((n) => ({
-            value: String(n),
-            label: `${n} días`,
-          }))}
+          options={horizons}
+        />
+        <ToolbarDate
+          label="Fecha de proyección"
+          value={to}
+          min={from}
+          max={nextDate(data.cutoff, PROJECTION_HORIZON_MAX)}
+          onSelect={(iso) =>
+            setFilters((f) => ({ ...f, horizon: daysUntil(iso, data.cutoff) }))
+          }
+          hint={`Proyección diaria desde el corte hasta el día elegido. El motor llega hasta ${PROJECTION_HORIZON_MAX} días después del corte.`}
         />
         <ToolbarSelect
           label="Valores"

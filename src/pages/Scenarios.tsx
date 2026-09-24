@@ -157,6 +157,7 @@ export default function Scenarios() {
                 />
               </label>
               <DecisionControls
+                cutoff={safeContext.cutoff}
                 currency={context.currency}
                 horizon={context.horizon}
                 onCurrency={(currency) =>

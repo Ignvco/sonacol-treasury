@@ -71,6 +71,7 @@ export default function Assistant() {
       />
       <DecisionControls
         {...filters}
+        cutoff={bundle.cutoff}
         onCurrency={filters.setCurrency}
         onHorizon={filters.setHorizon}
       />
