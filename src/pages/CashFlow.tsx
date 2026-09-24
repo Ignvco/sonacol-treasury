@@ -119,9 +119,12 @@ export default function CashFlow() {
     <div className="t-fade-in flex min-w-0 flex-col gap-5">
       <PageHeader
         title="Flujo de caja"
-        subtitle="La misma proyección diaria de Resumen: saldo inicial + ingresos − egresos"
+        subtitle="Serie diaria completa: saldo inicial + ingresos − egresos, filtrable y exportable."
         actions={
           <>
+            <Link to="/dashboard" className="t-button-secondary">
+              Ver resumen ejecutivo
+            </Link>
             <ExportMenu rows={exportRows} filename="flujo-de-caja" />
             {canWrite && (
               <Link to="/projections" className="t-button-primary">

@@ -146,17 +146,17 @@ export default function Accuracy() {
                   { key: "date", header: "Fecha" },
                   {
                     key: "expected",
-                    header: "Previsto",
+                    header: "Previsto", align: "right",
                     render: (r) => baseNumber(r.expected),
                   },
                   {
                     key: "observed",
-                    header: "Observado",
+                    header: "Observado", align: "right",
                     render: (r) => baseNumber(r.observed),
                   },
                   {
                     key: "error",
-                    header: "Diferencia",
+                    header: "Diferencia", align: "right",
                     render: (r) => baseNumber(r.error),
                   },
                 ]}

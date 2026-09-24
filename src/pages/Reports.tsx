@@ -139,17 +139,17 @@ export default function Reports() {
             { key: "date", header: "Fecha" },
             {
               key: "income",
-              header: "Ingresos",
+              header: "Ingresos", align: "right",
               render: (r) => baseNumber(r.income),
             },
             {
               key: "expense",
-              header: "Egresos",
+              header: "Egresos", align: "right",
               render: (r) => baseNumber(r.expense),
             },
             {
               key: "balance",
-              header: "Saldo",
+              header: "Saldo", align: "right",
               render: (r) => baseNumber(r.balance),
             },
           ]}

@@ -33,6 +33,7 @@ import {
   baseNumber,
 } from "@/components/treasury/SourceBreakdown";
 import { DataTable } from "@/components/treasury/DataTable";
+import { PageHeader } from "@/components/treasury/PageHeader";
 import {
   LoadingState,
   ErrorState,
@@ -115,27 +116,28 @@ export default function Dashboard() {
   ];
   return (
     <div className="t-fade-in min-w-0 space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
-            SONACOL · Tesorería
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            Resumen de caja
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Corte de BASE: {data.cutoff} · Selecciona cualquier cifra para
-            revisar su origen.
-          </p>
-        </div>
-        <button
-          aria-label="Actualizar dashboard"
-          className="t-button-secondary"
-          onClick={() => setRefresh((x) => x + 1)}
-        >
-          <RefreshCw size={15} /> Actualizar
-        </button>
-      </header>
+      <PageHeader
+        title="Resumen"
+        subtitle={
+          "Foto ejecutiva de la caja al " +
+          data.cutoff +
+          ": composición, tendencia y detalle diario. Selecciona cualquier cifra para revisar su origen."
+        }
+        actions={
+          <>
+            <Link to="/today" className="t-button-secondary">
+              Qué exige acción hoy
+            </Link>
+            <button
+              aria-label="Actualizar dashboard"
+              className="t-button-secondary"
+              onClick={() => setRefresh((x) => x + 1)}
+            >
+              <RefreshCw size={15} /> Actualizar
+            </button>
+          </>
+        }
+      />
       <ProjectionControls
         data={data}
         filters={filters}
@@ -196,7 +198,7 @@ export default function Dashboard() {
         varios días.
       </p>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2.3fr)_minmax(280px,1fr)]">
-        <section className="min-w-0 rounded-2xl border bg-white p-5 md:p-6">
+        <section className="min-w-0 rounded-2xl border border-border bg-card p-5 md:p-6">
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Evolución de caja</h2>
@@ -348,7 +350,7 @@ export default function Dashboard() {
           </p>
         </aside>
       </div>
-      <section className="rounded-2xl border bg-white p-5">
+      <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="mb-4 font-semibold">Saldo contable por banco</h2>
         <DataTable
           data={model.positions}
@@ -374,8 +376,16 @@ export default function Dashboard() {
           con cartola se consulta por separado.
         </p>
       </section>
-      <section className="rounded-2xl border bg-white p-5">
-        <h2 className="mb-4 font-semibold">Detalle diario de la proyección</h2>
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Detalle diario de la proyección</h2>
+          <Link
+            to="/cashflow"
+            className="text-[12px] font-semibold text-brand hover:text-brand-dark"
+          >
+            Ver la serie completa
+          </Link>
+        </div>
         <DataTable
           data={model.daily}
           rowKey={(r) => r.date}

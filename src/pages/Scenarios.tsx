@@ -336,7 +336,7 @@ export default function Scenarios() {
                 },
                 {
                   key: "amount",
-                  header: "Importe",
+                  header: "Importe", align: "right",
                   render: (r) => (
                     <input
                       className="t-input w-36"

@@ -1,0 +1,205 @@
+diff --git a/src/pages/Accuracy.tsx b/src/pages/Accuracy.tsx
+index 3d1c3a9..138c7b6 100644
+--- a/src/pages/Accuracy.tsx
++++ b/src/pages/Accuracy.tsx
+@@ -146,17 +146,17 @@ export default function Accuracy() {
+                   { key: "date", header: "Fecha" },
+                   {
+                     key: "expected",
+-                    header: "Previsto",
++                    header: "Previsto", align: "right",
+                     render: (r) => baseNumber(r.expected),
+                   },
+                   {
+                     key: "observed",
+-                    header: "Observado",
++                    header: "Observado", align: "right",
+                     render: (r) => baseNumber(r.observed),
+                   },
+                   {
+                     key: "error",
+-                    header: "Diferencia",
++                    header: "Diferencia", align: "right",
+                     render: (r) => baseNumber(r.error),
+                   },
+                 ]}
+diff --git a/src/pages/CashFlow.tsx b/src/pages/CashFlow.tsx
+index 59754cf..894ec79 100644
+--- a/src/pages/CashFlow.tsx
++++ b/src/pages/CashFlow.tsx
+@@ -119,9 +119,12 @@ export default function CashFlow() {
+     <div className="t-fade-in flex min-w-0 flex-col gap-5">
+       <PageHeader
+         title="Flujo de caja"
+-        subtitle="La misma proyección diaria de Resumen: saldo inicial + ingresos − egresos"
++        subtitle="Serie diaria completa: saldo inicial + ingresos − egresos, filtrable y exportable."
+         actions={
+           <>
++            <Link to="/dashboard" className="t-button-secondary">
++              Ver resumen ejecutivo
++            </Link>
+             <ExportMenu rows={exportRows} filename="flujo-de-caja" />
+             {canWrite && (
+               <Link to="/projections" className="t-button-primary">
+diff --git a/src/pages/Dashboard.tsx b/src/pages/Dashboard.tsx
+index baacbc9..6bb8bec 100644
+--- a/src/pages/Dashboard.tsx
++++ b/src/pages/Dashboard.tsx
+@@ -33,6 +33,7 @@ import {
+   baseNumber,
+ } from "@/components/treasury/SourceBreakdown";
+ import { DataTable } from "@/components/treasury/DataTable";
++import { PageHeader } from "@/components/treasury/PageHeader";
+ import {
+   LoadingState,
+   ErrorState,
+@@ -115,27 +116,28 @@ export default function Dashboard() {
+   ];
+   return (
+     <div className="t-fade-in min-w-0 space-y-6">
+-      <header className="flex flex-wrap items-center justify-between gap-4">
+-        <div>
+-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
+-            SONACOL · Tesorería
+-          </p>
+-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+-            Resumen de caja
+-          </h1>
+-          <p className="mt-2 text-sm text-muted-foreground">
+-            Corte de BASE: {data.cutoff} · Selecciona cualquier cifra para
+-            revisar su origen.
+-          </p>
+-        </div>
+-        <button
+-          aria-label="Actualizar dashboard"
+-          className="t-button-secondary"
+-          onClick={() => setRefresh((x) => x + 1)}
+-        >
+-          <RefreshCw size={15} /> Actualizar
+-        </button>
+-      </header>
++      <PageHeader
++        title="Resumen"
++        subtitle={
++          "Foto ejecutiva de la caja al " +
++          data.cutoff +
++          ": composición, tendencia y detalle diario. Selecciona cualquier cifra para revisar su origen."
++        }
++        actions={
++          <>
++            <Link to="/today" className="t-button-secondary">
++              Qué exige acción hoy
++            </Link>
++            <button
++              aria-label="Actualizar dashboard"
++              className="t-button-secondary"
++              onClick={() => setRefresh((x) => x + 1)}
++            >
++              <RefreshCw size={15} /> Actualizar
++            </button>
++          </>
++        }
++      />
+       <ProjectionControls
+         data={data}
+         filters={filters}
+@@ -196,7 +198,7 @@ export default function Dashboard() {
+         varios días.
+       </p>
+       <div className="grid gap-5 xl:grid-cols-[minmax(0,2.3fr)_minmax(280px,1fr)]">
+-        <section className="min-w-0 rounded-2xl border bg-white p-5 md:p-6">
++        <section className="min-w-0 rounded-2xl border border-border bg-card p-5 md:p-6">
+           <div className="mb-6 flex items-center justify-between gap-3">
+             <div>
+               <h2 className="font-semibold">Evolución de caja</h2>
+@@ -348,7 +350,7 @@ export default function Dashboard() {
+           </p>
+         </aside>
+       </div>
+-      <section className="rounded-2xl border bg-white p-5">
++      <section className="rounded-2xl border border-border bg-card p-5">
+         <h2 className="mb-4 font-semibold">Saldo contable por banco</h2>
+         <DataTable
+           data={model.positions}
+@@ -374,8 +376,16 @@ export default function Dashboard() {
+           con cartola se consulta por separado.
+         </p>
+       </section>
+-      <section className="rounded-2xl border bg-white p-5">
+-        <h2 className="mb-4 font-semibold">Detalle diario de la proyección</h2>
++      <section className="rounded-2xl border border-border bg-card p-5">
++        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
++          <h2 className="font-semibold">Detalle diario de la proyección</h2>
++          <Link
++            to="/cashflow"
++            className="text-[12px] font-semibold text-brand hover:text-brand-dark"
++          >
++            Ver la serie completa
++          </Link>
++        </div>
+         <DataTable
+           data={model.daily}
+           rowKey={(r) => r.date}
+diff --git a/src/pages/Reports.tsx b/src/pages/Reports.tsx
+index 33a3881..a11e0cd 100644
+--- a/src/pages/Reports.tsx
++++ b/src/pages/Reports.tsx
+@@ -139,17 +139,17 @@ export default function Reports() {
+             { key: "date", header: "Fecha" },
+             {
+               key: "income",
+-              header: "Ingresos",
++              header: "Ingresos", align: "right",
+               render: (r) => baseNumber(r.income),
+             },
+             {
+               key: "expense",
+-              header: "Egresos",
++              header: "Egresos", align: "right",
+               render: (r) => baseNumber(r.expense),
+             },
+             {
+               key: "balance",
+-              header: "Saldo",
++              header: "Saldo", align: "right",
+               render: (r) => baseNumber(r.balance),
+             },
+           ]}
+diff --git a/src/pages/Scenarios.tsx b/src/pages/Scenarios.tsx
+index 80ee7b8..ddf09a6 100644
+--- a/src/pages/Scenarios.tsx
++++ b/src/pages/Scenarios.tsx
+@@ -336,7 +336,7 @@ export default function Scenarios() {
+                 },
+                 {
+                   key: "amount",
+-                  header: "Importe",
++                  header: "Importe", align: "right",
+                   render: (r) => (
+                     <input
+                       className="t-input w-36"
+diff --git a/src/pages/Today.tsx b/src/pages/Today.tsx
+index 7bc61bf..39a21c6 100644
+--- a/src/pages/Today.tsx
++++ b/src/pages/Today.tsx
+@@ -82,11 +82,16 @@ export default function Today() {
+     <div className="grid gap-5 t-fade-in">
+       <PageHeader
+         title="Hoy"
+-        subtitle="Decide con tu caja, tus compromisos y el origen de cada cifra."
++        subtitle="Lo que exige acción hoy: caja disponible, umbral, cambios y agenda."
+         actions={
+-          <Link className="t-button-secondary" to="/scenarios">
+-            Explorar escenarios <ArrowUpRight size={16} />
+-          </Link>
++          <>
++            <Link className="t-button-secondary" to="/cashflow">
++              Ver serie diaria
++            </Link>
++            <Link className="t-button-secondary" to="/scenarios">
++              Explorar escenarios <ArrowUpRight size={16} />
++            </Link>
++          </>
+         }
+       />
+       <div className="flex flex-wrap items-end justify-between gap-3">

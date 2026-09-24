@@ -82,11 +82,16 @@ export default function Today() {
     <div className="grid gap-5 t-fade-in">
       <PageHeader
         title="Hoy"
-        subtitle="Decide con tu caja, tus compromisos y el origen de cada cifra."
+        subtitle="Lo que exige acción hoy: caja disponible, umbral, cambios y agenda."
         actions={
-          <Link className="t-button-secondary" to="/scenarios">
-            Explorar escenarios <ArrowUpRight size={16} />
-          </Link>
+          <>
+            <Link className="t-button-secondary" to="/cashflow">
+              Ver serie diaria
+            </Link>
+            <Link className="t-button-secondary" to="/scenarios">
+              Explorar escenarios <ArrowUpRight size={16} />
+            </Link>
+          </>
         }
       />
       <div className="flex flex-wrap items-end justify-between gap-3">
