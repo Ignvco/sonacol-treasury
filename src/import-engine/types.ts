@@ -25,6 +25,10 @@ export interface SheetResult {
 }
 
 export interface BaseReadingSummary {
+  sheetName?: string;
+  periodStart?: string | null;
+  company?: string;
+  localCurrency?: string;
   profileId: string;
   headerRow: number;
   firstDataRow: number | null;
@@ -69,6 +73,10 @@ export type ImportIssue =
 
 /** Explicit choices override detection, keyed by worksheet name. */
 export interface SheetOverride {
+  investmentPeriodStart?: string;
+  periodStart?: string;
+  company?: string;
+  localCurrency?: string;
   cutoffDate?: string;
   numberLocale?: "es-CL" | "en-US";
   entityType?: ImportEntityType;
@@ -78,10 +86,11 @@ export interface SheetOverride {
 }
 export type ImportOverrides = Record<string, SheetOverride>;
 export interface ImportComparisonRow {
+ sheet?: string;
  manualEdited?:boolean; row:number; change:"new"|"modified"|"unchanged"|"conflict"|"invalid"; entityId:string|null;
  before:Record<string,unknown>|null; after:Record<string,unknown>; reason:string|null;
 }
-export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;}
+export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;uncoveredCurrencies?:string[];}
 export interface ImportPreview extends ImportSummary { fileHash: string; comparison?:ImportComparison; comparisonError?:string; }
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 20000;

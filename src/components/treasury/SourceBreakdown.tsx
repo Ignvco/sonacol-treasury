@@ -11,18 +11,18 @@ export function SourceBreakdown({title,rows,onClose}:{title:string;rows:(Treasur
  const amount=(r:TreasuryRow|ForecastEvent)=>"signed" in r?r.signed:r.type==="expense"?-r.amount:r.amount;
  const open=async(row:TreasuryRow)=>{
    const revision=++request.current;
-   setDetail(null);setError("");setBusy(false);if(!row.recordId){setDetail({title:"Ingreso en plataforma",raw:{Descripción:row.description,Fecha:row.date,Monto:row.amount,Moneda:row.currency}});return;}
+   setDetail(null);setError("");setBusy(false);if(!row.recordId){setDetail({title:row.normalized?.isPosition ? "Posición calculada desde el mayor ERP" : "Ingreso en plataforma",raw:{Descripción:row.description,Fecha:row.date,Monto:row.amount,Moneda:row.currency,...(row.normalized?.isPosition ? {Cuenta:row.ledger,"Registros del mayor":(row.normalized.traceRecords as string[] | undefined)?.length,"Capital reservado":row.normalized.reservedAmount,"Capital remanente":row.normalized.remainingAmount} : {})}});return;}
    setBusy(true);try{const d=await baseTreasuryService.trace(row.recordId);if(revision===request.current)setDetail({title:row.fileName+" · "+d.source_sheet+" · fila "+d.source_row,raw:d.raw_json});}
    catch(e){if(revision===request.current)setError(e instanceof Error?e.message:"No se pudo cargar el origen.");}finally{if(revision===request.current)setBusy(false);}
  };
  return <Dialog open onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
-  <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Selecciona una fila para consultar sus valores originales de BASE.</DialogDescription></DialogHeader>
+  <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Selecciona una fila para consultar sus valores de origen.</DialogDescription></DialogHeader>
   <DataTable data={rows} rowKey={r=>r.kind+":"+r.id} pageSize={8} search searchText={r=>r.description+" "+r.document+" "+r.bank+" "+r.row} onRowClick={r=>void open(r)} columns={[
    {key:"date",header:"Fecha",render:r=>"effectiveDate" in r?r.effectiveDate:r.date,sortValue:r=>r.date},
    {key:"source",header:"Origen",render:r=>r.origin},
    {key:"detail",header:"Detalle",className:"!whitespace-normal min-w-[180px]",render:r=>r.description||r.customer||r.document},
    {key:"bank",header:"Banco",render:r=>r.bank},
-   {key:"row",header:"Fila BASE",render:r=>r.row??"Manual"},
+   {key:"row",header:"Fila de origen",render:r=>r.row??(r.normalized?.isPosition ? "Mayor ERP" : "Manual")},
    {key:"amount",header:"Aporte al cálculo",align:"right",render:r=>baseNumber(amount(r)),sortValue:amount},
    {key:"currency",header:"Moneda",render:r=>r.currency}
   ]}/>

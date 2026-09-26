@@ -7,7 +7,9 @@ export function importControlTotals(records: ProcessedRecord[]) {
   for (const record of records) {
     if (!["VALID", "WARNING"].includes(record.status)) continue;
     const n = record.normalized;
-    const origin = String(n.sourceOrigin), currency = String(n.currency);
+    const role = String(n.recordRole ?? "");
+    const suffix = role.endsWith("_opening") ? " · apertura" : role.endsWith("_movement") ? " · movimientos" : "";
+    const origin = String(n.sourceOrigin) + suffix, currency = String(n.currency);
     const amount = Number(n.amount) * (n.type === "expense" ? -1 : 1);
     if (!Number.isFinite(amount)) continue;
     const key = origin + ":" + currency;

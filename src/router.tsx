@@ -15,6 +15,7 @@ const Reconciliation = lazy(() => import("./pages/Reconciliation"));
 const Receivables = lazy(() => import("./pages/Receivables"));
 const Investments = lazy(() => import("./pages/Investments"));
 const Projections = lazy(() => import("./pages/Projections"));
+const Planning = lazy(() => import("./pages/planning"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Importations = lazy(() => import("./pages/Importations"));
@@ -53,6 +54,7 @@ export const routers = [
       },
       { path: "investments", name: "Inversiones", element: <Investments /> },
       { path: "projections", name: "Proyecciones", element: <Projections /> },
+      { path: "planning", name: "Planificación y reglas", element: <Planning /> },
       { path: "reports", name: "Reportes", element: <Reports /> },
       {
         path: "importations",

@@ -415,7 +415,7 @@ export const dataService = {
           .filter((r) => r.kind === "invoice")
           .map((r) => {
             const n = r.normalized ?? {},
-              id = String(n.rut || r.customer);
+              id = String(n.customerCode || n.rut || r.customer);
             return [
               id,
               {
@@ -438,11 +438,11 @@ export const dataService = {
         const n = r.normalized ?? {};
         return {
           id: r.id,
-          customer_id: String(n.rut || r.customer),
+          customer_id: String(n.customerCode || n.rut || r.customer),
           document: r.document,
           issue_date: n.issueDate ?? r.date,
           due_date: n.dueDate ?? r.plannedDate,
-          amount: r.amount,
+          amount: r.type === "expense" ? -r.amount : r.amount,
           currency: r.currency,
           status: r.status,
         };
@@ -462,7 +462,7 @@ export const dataService = {
           amount: r.amount,
           currency: r.currency,
           start_date: n.startDate ?? r.date,
-          end_date: n.endDate ?? r.plannedDate,
+          end_date: n.isPosition ? "" : n.endDate ?? r.plannedDate,
           rate_known: n.rateKnown !== false,
           rate: n.rate ?? 0,
           estimated_interest: r.interest,
@@ -476,7 +476,7 @@ export const dataService = {
   async getProjections(currentRows?: TreasuryRow[]): Promise<Projection[]> {
     const source = currentRows ?? (await baseTreasuryService.load()).rows;
     return source
-      .filter((r) => r.kind === "projection")
+      .filter((r) => r.kind === "projection" && r.normalized?.recordRole !== "planned_redemption")
       .map((r) => ({
         ...toProjection({
           id: r.id,
@@ -558,7 +558,7 @@ export const dataService = {
   }): Promise<CashFlow[]> {
     const b = await baseTreasuryService.load();
     const rows = b.rows
-      .filter((r) => r.kind === "cash_flow" || r.kind === "projection")
+      .filter((r) => (r.kind === "cash_flow" || r.kind === "projection") && r.normalized?.recordRole !== "bank_opening")
       .map((r) =>
         toCashFlow({
           id: r.id,

@@ -11,6 +11,10 @@ export interface RawRow {
   edited?: boolean;
 }
 export interface RawSnapshot {
+  business?: BusinessDecision[];
+  businessIssues?: string[];
+  engineVersion?: string;
+  coverage?: { currency: string; profile: string };
   batch: {
     id: string;
     cutoff: string;
@@ -23,6 +27,11 @@ export interface RawSnapshot {
   manual: RawRow[];
   links: ForecastLink[];
   latestId: string | null;
+}
+export interface BusinessDecision {
+  id: string; batch_id: string; kind: "adjustment" | "redemption" | "rule";
+  target_key: string; values_json: Record<string, string | number | null>;
+  revision: number; deleted: boolean; updated_at: string;
 }
 export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
   return [...data.rows, ...data.manual].map((r) => {

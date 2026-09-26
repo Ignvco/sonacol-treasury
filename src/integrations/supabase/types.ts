@@ -3626,6 +3626,7 @@ export type Database = {
       }
       daily_base_rows: {
         Row: {
+          source_sheet: string
           batch_id: string
           entity_id: string
           entity_type: string
@@ -4955,6 +4956,14 @@ export type Database = {
       }
       compare_daily_base: {
         Args: { p_records: Json }
+        Returns: Json
+      }
+      compare_erp_import: {
+        Args: { p_records: Json }
+        Returns: Json
+      }
+      import_erp_daily: {
+        Args: { p_file_name: string; p_file_hash: string; p_records: Json; p_revision: string }
         Returns: Json
       }
       current_role: {

@@ -5,9 +5,10 @@ const format = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
 export function ImportControlTotals({ records }: { records: ProcessedRecord[] }) {
   const groups = importControlTotals(records);
   const invalid = records.filter((r) => r.status === "ERROR").length;
+  const title = records.some(r => r.normalized.sourceProfile === "ERP-RAW-v1") ? "Control de importes del archivo" : "Control de importes de BASE";
   return (
-    <section aria-label="Control de importes de BASE" className="mb-4 rounded-xl border p-4">
-      <h3 className="font-semibold">Control de importes de BASE</h3>
+    <section aria-label={title} className="mb-4 rounded-xl border p-4">
+      <h3 className="font-semibold">{title}</h3>
       <p className="mt-1 text-xs text-muted-foreground">
         Suma con signo de las filas válidas, por origen y moneda. Son importes del archivo, no cobros o pagos confirmados del período.
         Las monedas se mantienen separadas; no se convierte USD a CLP sin una tasa.
