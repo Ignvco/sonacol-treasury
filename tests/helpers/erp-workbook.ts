@@ -22,6 +22,12 @@ export function erpWorkbook() {
   return wb;
 }
 export const erpContext = { ERP: { company: "TEST", localCurrency: "CLP", cutoffDate: "2026-09-10", periodStart: "2026-09-01", investmentPeriodStart: "2026-09-01" } };
+export function erpWithoutInvestmentOpening(firstDate = "02/09/2026") {
+  const wb = erpWorkbook(), sheet = wb.Sheets.COLOCACIONES;
+  for (const address of Object.keys(sheet)) if (/^[A-Z]+2$/.test(address)) delete sheet[address];
+  sheet.A3 = { t: "s", v: firstDate };
+  return wb;
+}
 export function workbookBytes(wb = erpWorkbook()): ArrayBuffer {
   return XLSX.write(wb, { type: "array", bookType: "xlsx" });
 }

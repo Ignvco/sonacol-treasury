@@ -88,8 +88,10 @@ export function ImportPreview({
     [reviewed, setReviewed] = useState(false);
   const coordinate = (r: { sheet?: string; row: number }) => (r.sheet ?? baseSheet?.name ?? "BASE") + ":" + r.row;
   const byRow = new Map(comparison.map((r) => [coordinate(r), r]));
+  const invalidRecords = preview.records.filter(r => r.status === "ERROR");
+  const changeOf = (r: ProcessedRecord) => r.status === "ERROR" ? "invalid" : byRow.get(coordinate(r))?.change;
   const data = preview.records.filter(
-    (r) => !filter || byRow.get(coordinate(r))?.change === filter,
+    (r) => !filter || changeOf(r) === filter,
   );
   const newCount = comparison.filter((r) => r.change === "new").length;
   const automatic = comparison.filter(
@@ -112,7 +114,10 @@ export function ImportPreview({
         title="Compara tu Excel antes de actualizar"
         subtitle={preview.fileName}
       >
-        {isErp && <ErpImportContext initial={applied.ERP} busy={busy} onDirty={() => { setContextDirty(true); setReviewed(false); }} onApply={ERP => onAnalyze({ ...applied, ERP })} />}
+        {isErp && <ErpImportContext initial={applied.ERP} busy={busy}
+          firstBankDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "BANCOS")?.reading?.firstMovementDate}
+          firstInvestmentDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "COLOCACIONES")?.reading?.firstMovementDate}
+          onDirty={() => { setContextDirty(true); setReviewed(false); }} onApply={ERP => onAnalyze({ ...applied, ERP })} />}
         {isErp && cutoffIssue && <p role="alert" className="mb-4 text-sm text-danger">{cutoffIssue}</p>}
         {reading && !isErp && <ImportCutoff reading={reading} value={cutoffDate} issue={cutoffIssue} busy={busy}
           onChange={(date) => { setCutoffDate(date); setReviewed(false); }}
@@ -129,7 +134,7 @@ export function ImportPreview({
             >
               <p className="text-xs text-muted-foreground">{label}</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {comparison.filter((c) => c.change === key).length}
+                {preview.records.filter(r => changeOf(r) === key).length}
               </p>
             </button>
           ))}
@@ -162,10 +167,11 @@ export function ImportPreview({
           </div>
         )}
         {preview.error > 0 && (
-          <p role="alert" className="mb-4 text-sm text-danger">
-            Hay errores en {isErp ? "ERP" : "BASE"}. Se conservará la carga anterior hasta que todas
-            las filas sean válidas.
-          </p>
+          <div role="alert" className="mb-4 text-sm text-danger">
+            <p>Hay errores en {isErp ? "ERP" : "BASE"}. Se conservará la carga anterior hasta que todas las filas sean válidas.</p>
+            <ul className="mt-2 list-disc pl-5">{invalidRecords.slice(0, 5).map(r => <li key={coordinate(r)}>{r.sheet}!{r.row}: {r.warnings}</li>)}</ul>
+            {invalidRecords.length > 5 && <p>Usa «Con errores» para revisar las {invalidRecords.length} filas.</p>}
+          </div>
         )}
         {preview.comparison?.historical && (
           <p className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning">
@@ -236,7 +242,7 @@ export function ImportPreview({
             {
               key: "change",
               header: "Resultado",
-              render: (r) => labels[byRow.get(coordinate(r))?.change ?? "invalid"],
+              render: (r) => changeOf(r) ? labels[changeOf(r)!] : "Pendiente de comparación",
             },
             {
               key: "diff",

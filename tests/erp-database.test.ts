@@ -2,7 +2,9 @@ import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import type { PGlite } from "@electric-sql/pglite";
 import { decisionDb, query, upload, row, hash, session, reader } from "./helpers/decision-db";
-import { erpContext, workbookBytes } from "./helpers/erp-workbook";
+import { erpContext, erpWithoutInvestmentOpening, workbookBytes } from "./helpers/erp-workbook";
+import { snapshotRows, type RawSnapshot } from "../src/financial-engine/snapshot";
+import { baseTreasury } from "../src/financial-engine/base-treasury";
 import { parseWorkbook, processWorkbook } from "../src/import-engine/pipeline";
 import type { ProcessedRecord } from "../src/import-engine/types";
 let db: PGlite, records: ProcessedRecord[];
@@ -53,4 +55,49 @@ test("CAJA transition carries verified invoice dates and retains uncertain invoi
   assert.equal(snap.manual[0].normalized.amount, 5000);
   assert.equal(snap.manual[0].normalized.status, "borrador");
  } finally { await isolated.close(); }
+});
+
+test("SQL reconstructs omitted OB, preserves raw postings and does not double count explicit openings", async () => {
+ const next = processWorkbook(await parseWorkbook(workbookBytes(erpWithoutInvestmentOpening())), undefined, erpContext).records;
+ const b = await commit("no-opening", next);
+ const snap: RawSnapshot = await query(db, "select get_daily_base_snapshot($1) s", [b.id]);
+ const p = snap.rows.find(r => r.kind === "investment")!;
+ assert.equal(p.normalized.amount, 13000); assert.equal(p.normalized.inferredOpeningBalance, 10000);
+ assert.equal(p.normalized.openingSourceRow, 3); assert.equal(p.normalized.traceRecords.length, 2);
+ assert.equal(await query(db, "select count(*)::int s from daily_base_rows where batch_id=$1", [b.id]), 7);
+ assert.equal(baseTreasury(snapshotRows(snap), [], snap.batch!.cutoff, 30, "CLP").invested, 13000);
+ // Includes the 100 MANUAL carried by the earlier CAJA test, never investment capital.
+ assert.equal(baseTreasury(snapshotRows(snap), [], snap.batch!.cutoff, 30, "CLP").collections, 2100);
+ assert.equal(baseTreasury(snapshotRows(snap), [], snap.batch!.cutoff, 30, "CLP").events.filter(r => r.kind === "investment").length, 0);
+ const original = await commit("with-opening", records);
+ const old: RawSnapshot = await query(db, "select get_daily_base_snapshot($1) s", [original.id]);
+ assert.equal(old.rows.find(r => r.kind === "investment")!.normalized.amount, 13000);
+ assert.equal(old.rows.find(r => r.kind === "investment")!.normalized.inferredOpeningBalance, undefined);
+ const repeated = await commit("no-opening-renamed", next); assert.equal(repeated.id, b.id);
+});
+
+test("SQL independently verifies inferred opening and all later cumulative balances", async () => {
+ const next = processWorkbook(await parseWorkbook(workbookBytes(erpWithoutInvestmentOpening())), undefined, erpContext).records;
+ const forged = structuredClone(next); forged.find(r => r.entityType === "investment")!.normalized.inferredOpeningBalance = 0;
+ await assert.rejects(commit("forged-opening", forged), /Apertura calculada no coincide/);
+ const bad = structuredClone(next); bad.filter(r => r.entityType === "investment")[1].normalized.balance = 12000;
+ await assert.rejects(commit("no-opening-bad-balance", bad), /Saldo acumulado/);
+ const bare = structuredClone(next); delete bare.find(r => r.entityType === "investment")!.normalized.inferredOpeningBalance;
+ const b = await commit("server-derives-opening", bare);
+ const snap: RawSnapshot = await query(db, "select get_daily_base_snapshot($1) s", [b.id]);
+ assert.equal(snap.rows.find(r => r.kind === "investment")!.normalized.amount, 13000);
+ const absent = structuredClone(next); delete absent.find(r => r.entityType === "investment")!.normalized.balance;
+ await assert.rejects(commit("no-first-balance", absent), /Saldo acumulado/);
+});
+
+test("omitted opening is derived per account and supports a first withdrawal", async () => {
+ const next = processWorkbook(await parseWorkbook(workbookBytes(erpWithoutInvestmentOpening())), undefined, erpContext).records;
+ const extra = structuredClone(next.filter(r => r.entityType === "investment"));
+ extra.forEach((r, i) => { r.row = 5 + i; r.normalized.ledgerCode = "FUND-02"; });
+ Object.assign(extra[0].normalized, { signedAmount: -2000, amount: 2000, type: "expense", debe: 0, haber: 2000, balance: 8000, inferredOpeningBalance: 10000 });
+ extra[1].normalized.balance = 6000;
+ const b = await commit("two-investment-accounts", [...next, ...extra]);
+ const snap: RawSnapshot = await query(db, "select get_daily_base_snapshot($1) s", [b.id]);
+ assert.equal(snap.rows.find(r => r.normalized.ledgerCode === "FUND-01")!.normalized.amount, 13000);
+ assert.equal(snap.rows.find(r => r.normalized.ledgerCode === "FUND-02")!.normalized.amount, 6000);
 });

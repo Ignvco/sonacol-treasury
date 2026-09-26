@@ -25,6 +25,7 @@ export interface SheetResult {
 }
 
 export interface BaseReadingSummary {
+  firstMovementDate?: string | null;
   sheetName?: string;
   periodStart?: string | null;
   company?: string;

@@ -33,6 +33,7 @@ project-root/
 - **src/pages/importations/ErpImportContext.tsx**: Declared company, local currency, cutoff and separate bank/investment reporting periods for raw ERP imports.
 - **supabase/migrations/20260926000000000_erp_raw_import.sql**: Guarded ERP contract, stable identities, multi-sheet coordinates and atomic daily refresh with MANUAL preservation.
 - **supabase/migrations/20260926010000000_business_planning.sql**: Versioned business decisions, invoice adjustments, classification/collection rules, investment positions and partial redemptions. The snapshot RPC composes these layers while keeping raw ERP rows immutable.
+- **supabase/migrations/20260926020000000_erp_investment_opening.sql**: Additive support for investment reports without OB; verifies each cumulative balance and derives opening capital from the first real posting without fabricating source rows.
 - **src/services/planningService.ts**: Guarded business-decision loading and versioned writes.
 - **src/pages/planning/index.tsx**: Planning workspace: positions, reservations, collections, rules and unresolved decisions.
 - **src/pages/planning/DecisionDialog.tsx**: Edits operational adjustments, partial redemptions and explicit business rules, separately from imported facts.
