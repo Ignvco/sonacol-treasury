@@ -4,6 +4,7 @@ import { CASHFLOW_CATEGORY_LABEL } from "@/financial-engine/types";
 import type { BusinessDecision, RawSnapshot } from "@/financial-engine/snapshot";
 import { planningService } from "@/services/planningService";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
+import { DecisionEvidence } from "./DecisionEvidence";
 
 const names = { adjustment: "Ajuste operativo", redemption: "Rescate programado", rule: "Regla de negocio" };
 export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: {
@@ -12,14 +13,17 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
   const [target, setTarget] = useState(initial?.target_key ?? targetKey ?? (kind === "rule" ? "*" : ""));
   const [values, setValues] = useState<BusinessDecision["values_json"]>(initial?.values_json ?? (kind === "rule" ? { ruleType: "collection", days: 5, priority: 10 } : kind === "redemption" ? { status: "planned", currency: snapshot.coverage?.currency ?? "CLP" } : {}));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [reviewedTarget, setReviewedTarget] = useState("");
   const update = (field: string, value: string | number) => setValues(v => ({ ...v, [field]: value }));
-  const targets = snapshot.rows.filter(r => kind === "redemption" ? r.kind === "investment" : ["invoice", "cash_flow"].includes(r.kind) && r.normalized.recordRole !== "bank_opening");
+  const targets = snapshot.rows.filter(r => kind === "redemption" ? r.kind === "investment" : initial?.source_json?.kind === "invoice" ? r.kind === "invoice" && r.normalized.currency === initial.source_json.normalized.currency : ["invoice", "cash_flow"].includes(r.kind) && r.normalized.recordRole !== "bank_opening");
   const selected = snapshot.rows.find(r => r.normalized.businessKey === target);
   const banks = snapshot.rows.filter(r => r.normalized.recordRole === "bank_opening");
   const collectionRule = kind === "rule" && values.ruleType === "collection";
+  const bindingChanged = !!initial && kind !== "rule" && target !== initial.target_key;
   const bankAllowed = kind === "redemption" || collectionRule || (kind === "adjustment" && selected?.kind === "invoice");
   const save = async (remove = false) => {
     if (!snapshot.batch || busy) return;
+    if (!remove && bindingChanged && reviewedTarget !== target) { setError("Confirma la correspondencia después de revisar el origen y el destino."); return; }
     setBusy(true); setError("");
     try { await planningService.save(snapshot.batch.id, kind, target, values, initial, remove); onClose(); }
     catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); }
@@ -33,6 +37,8 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
         {target && !targets.some(r => r.normalized.businessKey === target) && <option value={target}>Registro anterior fuera de cobertura · reasignar</option>}
         {targets.map(r => <option key={r.id} value={r.normalized.businessKey}>{r.normalized.customer || r.normalized.description} {r.normalized.document} · {baseNumber(Number(r.normalized.amount))} {r.normalized.currency}</option>)}
       </select></label>}
+      {initial && <DecisionEvidence decision={initial} selected={selected} />}
+      {bindingChanged && <label className="flex items-start gap-2 text-sm"><input className="mt-1" type="checkbox" checked={reviewedTarget === target} onChange={e => setReviewedTarget(e.target.checked ? target : "")} />Confirmo que revisé la correspondencia entre el origen y este destino ERP.</label>}
       {selected?.kind === "invoice" && <p className="rounded-lg bg-sunken p-3 text-sm">Vencimiento original: {selected.normalized.dueDate}. Fecha prevista actual: {selected.normalized.adjustedDate || selected.normalized.reportDate || selected.normalized.dueDate}.</p>}
       {selected?.kind === "investment" && <p className="rounded-lg bg-sunken p-3 text-sm">Capital: {baseNumber(Number(selected.normalized.amount))} {selected.normalized.currency} · Reservado: {baseNumber(Number(selected.normalized.reservedAmount ?? 0))} · Remanente: {baseNumber(Number(selected.normalized.remainingAmount ?? selected.normalized.amount))}.</p>}
       {kind === "rule" && <>
