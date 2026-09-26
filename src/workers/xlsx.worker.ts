@@ -30,7 +30,7 @@ ctx.onmessage = async (e: MessageEvent<ImportMessage>) => {
       type: "progress",
       done: 0,
       total: sheets.length,
-      phase: "Analizando únicamente BASE…",
+      phase: "Analizando el perfil del archivo…",
     });
     const summary: ImportSummary = processWorkbook(sheets, (done, total, phase) => {
       ctx.postMessage({ type: "progress", done, total, phase });

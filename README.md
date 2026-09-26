@@ -1,6 +1,6 @@
 # SONACOL Treasury — manual del proyecto
 
-Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **23 de septiembre de 2026** para **BASE diaria v7 + plataforma de decisiones decision-v1 + plantilla SONACOL BASE v1**. Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
+Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **26 de septiembre de 2026** para **ERP crudo v1 + planificación de negocio v1**, manteniendo la compatibilidad con **SONACOL BASE v1**. Repositorio: [Ignvco/sonacol-treasury](https://github.com/Ignvco/sonacol-treasury). Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
 
 ## Índice
 
@@ -28,12 +28,26 @@ Documento único de funcionamiento, arquitectura, instalación, base de datos, o
 22. [Extracción y programación SAP](#22-extracción-y-programación-sap)
 23. [Respaldos y prueba de restauración](#23-respaldos-y-prueba-de-restauración)
 24. [Nuevos objetos y referencias técnicas](#24-nuevos-objetos-y-referencias-técnicas)
+25. [Activar ERP y planificación](#25-activar-erp-y-planificación)
 
 ## 1. Objetivo y reglas del negocio
 
 Aplicación interna de tesorería para consultar caja, cuentas por cobrar, inversiones y proyecciones, con información diaria procedente de SAP Business One y ajustes manuales del equipo.
 
-**La única hoja que se importa es BASE.** BANCO, CLIENTES, COLOCACIONES y MANUAL son valores de su columna de origen; no son instrucciones para abrir otras pestañas del libro.
+**ERP.xlsm es materia prima; CAJA es el sistema financiero manual que la plataforma reemplaza progresivamente.** ERP no tiene que contener BASE, MANUAL, proyecciones ni cálculos auxiliares. La aplicación separa datos importados, decisiones del usuario y resultados calculados.
+
+| Elemento identificado en CAJA | Destino en la plataforma | Alcance de esta etapa |
+| --- | --- | --- |
+| Datos directos ERP | Lotes y filas originales de BANCOS, CLIENTES y COLOCACIONES | Importación, validación y trazabilidad por hoja/fila |
+| Datos calculados | Motor financiero y consulta compuesta | Saldos bancarios, posiciones y serie diaria |
+| Datos ingresados manualmente | `daily_manual` / Proyecciones | Se mantienen al importar ERP |
+| Datos modificados por el usuario | `treasury_business_decisions` / Planificación | Fecha prevista, clasificación, cuenta receptora y observaciones; original conservado |
+| Proyecciones | Reglas, movimientos manuales y rescates programados | Fechas de cobro y rescates parciales; escenarios existentes |
+| Reglas de negocio | Reglas versionadas en Planificación | Desplazamiento de vencimiento y clasificación por descripción; las demás reglas requieren validación progresiva |
+| Cálculos auxiliares | Funciones del lector y del motor | Cargo menos abono, apertura, acumulados y capital reservado; no se copian hojas auxiliares |
+| Información histórica | Lotes, decisiones por lote y previsiones congeladas | Consultable sin incorporar decisiones de fechas futuras |
+
+Hay dos perfiles de entrada. **ERP-RAW-v1** lee las tres hojas crudas. El perfil heredado **SONACOL BASE v1** lee únicamente BASE del Excel CAJA trabajado: BANCO, CLIENTES, COLOCACIONES y MANUAL son valores de su columna de origen.
 
 | Origen en BASE | Representa | Edición en la plataforma |
 | --- | --- | --- |
@@ -42,7 +56,7 @@ Aplicación interna de tesorería para consultar caja, cuentas por cobrar, inver
 | COLOCACIONES | Inversiones y vencimientos del ERP | Solo lectura; se actualiza por importación |
 | MANUAL | Ingresos y egresos proyectados por el usuario | Crear, editar y eliminar en Proyecciones |
 
-El archivo Excel se conserva intacto. No se ejecutan macros, no se abren hojas auxiliares y no se recalculan fórmulas. Los datos introducidos en PROYECTADO en Excel deben estar reflejados en BASE para entrar en la plataforma.
+El archivo Excel se conserva intacto. No se ejecutan macros ni se recalculan fórmulas. Para el perfil heredado CAJA, el lector utiliza los valores ya trabajados en BASE. Para ERP, las decisiones y proyecciones se construyen dentro de la plataforma; no se exige agregarlas al archivo de entrada.
 
 El objetivo operativo es recibir el ERP de forma automática y trabajar MANUAL directamente en la app. La importación de Excel permanece disponible como alternativa y para consultar fechas anteriores. **Importar un Excel trabajado sin conexión no significa que la aplicación tenga un modo de trabajo offline:** guardar, autenticar y consultar datos del servidor requiere conexión.
 
@@ -54,7 +68,8 @@ El objetivo operativo es recibir el ERP de forma automática y trabajar MANUAL d
 | Lectura Excel | SheetJS 0.20.3 desde `vendor/xlsx-0.20.3.tgz`; se ejecuta en un Web Worker |
 | Identificación de archivos | SHA-256 con `@noble/hashes` 2.0.1 dentro del worker; no requiere `crypto.subtle` del navegador |
 | Backend | Supabase Auth, API de datos y funciones PostgreSQL invocadas por RPC |
-| Persistencia | PostgreSQL: lotes, filas originales, espacios MANUAL por fecha y auditoría |
+| Persistencia | PostgreSQL: lotes, filas originales, MANUAL y decisiones de negocio versionadas por corte, auditoría |
+| Composición financiera | Datos ERP inmutables + reglas + ajustes explícitos → proyección diaria, caja, dashboard e informes |
 | Recepción SAP | Edge Function `sap-import`, ejecutada en el servidor, con autenticación propia |
 | Calidad | ESLint, TypeScript, Node Test Runner, PGlite y Playwright |
 
@@ -69,7 +84,7 @@ Requisitos definidos por el proyecto: **Node.js 24 LTS recomendado (mínimo del 
 Desde Terminal en tu Mac:
 
 ```bash
-cd "$HOME/Documents/Developer/sonaco-treasury-main"
+cd "$HOME/Documents/Developer/sonacol-treasury"
 node -v
 npx --yes pnpm@11.19.0 install --frozen-lockfile
 ```
@@ -130,6 +145,7 @@ El cliente incluye la conexión pública original como alternativa cuando las va
 | `/` | Hoy: caja, riesgo, antigüedad del ERP, cambio de caja y tareas con responsable |
 | `/dashboard` | Resumen de caja y saldo previsto de la misma serie diaria que Flujo de caja |
 | `/changes` | Comparación de dos BASE: altas, bajas, cambios y explicación de caja |
+| `/planning` | Fechas de cobro, clasificaciones, reglas y rescates parciales sobre ERP crudo |
 | `/scenarios` | Laboratorio de fechas, importes y exclusiones; escenarios guardados |
 | `/accuracy` | Previsiones congeladas frente a saldos BANCO observados posteriormente |
 | `/assistant` | Consultas verificables sobre caja, riesgo, cobros, egresos y cambios |
@@ -139,7 +155,7 @@ El cliente incluye la conexión pública original como alternativa cuando las va
 | `/payments` | Redirección de compatibilidad a Proyecciones |
 | `/reconciliation` | Cruce de BASE con cartolas CSV independientes; parcial y agrupado |
 | `/reports` | Informe ejecutivo PDF y Excel con contexto y fuentes |
-| `/importations` | Lectura exclusiva BASE, revisión, confirmación, historial y eliminación |
+| `/importations` | ERP crudo o CAJA/BASE, cobertura, comparación, confirmación, historial y eliminación |
 | `/integrations` | Historial real de Excel, SAP, respaldos/restauraciones y errores de la app |
 | `/security` | Autorización de usuarios, capacidades, umbrales y tasas históricas |
 | `/settings` | Selector global de BASE, plantilla de lectura Excel, preferencias, catálogo informativo heredado y auditoría |
@@ -152,7 +168,17 @@ La búsqueda global (botón de lupa o Ctrl/⌘ K) recorre documentos, clientes, 
 
 ## 6. Importación de Excel
 
-### Operación
+### ERP crudo: operación
+
+1. Selecciona ERP.xlsm con las hojas **BANCOS, CLIENTES y COLOCACIONES**. El perfil valida los encabezados conocidos y acepta columnas reordenadas. Un libro con BASE utiliza el perfil CAJA; no se mezclan ambos contratos.
+2. Declara empresa, moneda local, fecha de corte e inicio de **cada** mayor. El período de bancos puede diferir del período de inversiones. La apertura corresponde al día anterior al inicio de su mayor; la última transacción no acredita la fecha de extracción.
+3. Pulsa **Aplicar cobertura y comparar**. Revisa coordenadas hoja/fila, aperturas, movimientos, monedas ausentes y cambios. Modificar el contexto exige comparar otra vez.
+4. Confirma el conjunto completo. Una inconsistencia de estructura, fecha, importe o saldo acumulado impide reemplazar los datos aceptados.
+5. Abre **Planificación y reglas** para gestionar cobros, clasificaciones y rescates. Los movimientos adicionales siguen en **Proyecciones**.
+
+El perfil actual corresponde a exportaciones en **una moneda local declarada**, con cabeceras Activos por cuenta bancaria y apertura OB por cuenta de inversión. No suma CLP y USD como si fueran una moneda; importes ME requieren un contrato adicional. Las cuentas o monedas ausentes quedan fuera de la fotografía, sin acreditar saldo cero. El aviso de cobertura acompaña las vistas financieras.
+
+### CAJA / BASE: operación heredada
 
 1. Ingresa con rol Tesorería o Administrador y abre Importaciones.
 2. Selecciona o arrastra un solo `.xlsx`, `.xlsm` o `.xls`.
@@ -162,9 +188,9 @@ La búsqueda global (botón de lupa o Ctrl/⌘ K) recorre documentos, clientes, 
 
 Límites actuales: archivo de **20 MiB**, **20.000 registros financieros** y validación adicional del JSON en servidor de **25.000.000 bytes**. Las filas vacías de plantilla no cuentan como registros financieros. El análisis del worker tiene un límite de dos minutos; las operaciones SQL de importación declaran un límite de 55 segundos.
 
-El lector ignora dimensiones exageradas debidas a formato de celdas vacías, preserva los números de fila reales y carga únicamente una hoja BASE. Si falta o su nombre es ambiguo, detiene la operación. No busca datos en MACRO BANCO, MACRO CLIENTES, PARAMETROS, PROYECTADO DIARIO u otras pestañas.
+Ambos lectores ignoran dimensiones exageradas por formato vacío y preservan coordenadas reales. CAJA carga una sola hoja BASE; ERP requiere las tres hojas de su perfil. No se leen macros ni hojas auxiliares para completar automáticamente datos ausentes.
 
-### Columnas del formato SONACOL
+### Columnas del formato heredado SONACOL BASE
 
 La **plantilla de lectura SONACOL BASE v1** se consulta en **Configuración → Plantilla de lectura Excel → Ver columnas y reglas de lectura**. El lector y esa pantalla comparten el contrato `src/import-engine/base-profile.ts`: hoja, columnas, encabezados, variantes admitidas y celda de corte. Es un perfil de lectura integrado en la aplicación; no hay que descargar, rellenar ni modificar una plantilla Excel.
 
@@ -201,7 +227,9 @@ Para MANUAL se prioriza AJ VCTO, luego VCTO y finalmente FECHA. CLIENTES y COLOC
 
 ### Repetición, errores y compatibilidad
 
-La identidad de un Excel es SHA-256 de `BASE-DAILY-v7:` + SHA-256 hexadecimal de sus bytes + las opciones serializadas. La corrección de `digest` conserva exactamente esa identidad y la calcula dentro del worker, sin Web Crypto del navegador.
+ERP usa una identidad de contenido calculada en SQL: contempla registros repetidos y cobertura declarada, sin depender del nombre del archivo ni del orden de envío de sus registros. Volver a guardar el mismo contenido no duplica el lote. No elimina líneas bancarias iguales: sin identificador inequívoco de línea se conserva su multiplicidad. Las identidades de factura utilizan empresa, código de cliente, tipo, serie, documento ERP y cuota; el folio no se confunde con el documento ERP y el código de cliente no se interpreta como RUT.
+
+Para el perfil CAJA, la identidad de un Excel es SHA-256 de `BASE-DAILY-v7:` + SHA-256 hexadecimal de sus bytes + las opciones serializadas. La corrección de `digest` conserva exactamente esa identidad y la calcula dentro del worker, sin Web Crypto del navegador.
 
 La plantilla SONACOL BASE v1 no modifica esa huella, `BASE_READER_VERSION`, los identificadores de origen ni las reglas de actualización diaria. Su versión describe el contrato de lectura; no crea una nueva identidad de los datos existentes. No requiere SQL ni dependencias nuevas.
 
@@ -210,6 +238,14 @@ Reenviar los mismos bytes y opciones devuelve el lote existente. Si Excel vuelve
 La BASE diaria se acepta completa: una fila con error impide sustituir parcialmente la fecha activa. Las advertencias válidas permanecen visibles. Si otra operación modifica los datos después de la comparación, se exige analizar otra vez; no se sobrescriben cambios con una vista previa antigua.
 
 ## 7. Trabajo diario e historial
+
+En una importación ERP del mismo corte o posterior, **todos** los movimientos MANUAL se conservan, junto con reglas, ajustes y rescates. Cada nuevo lote recibe una versión de esas decisiones. Editar una versión no modifica una fecha anterior ni una previsión congelada. Importar un archivo histórico no le incorpora decisiones futuras.
+
+En la primera transición CAJA → ERP solo se trasladan fechas de factura de manera automática si folio, cliente, monto, moneda, emisión y vencimiento permiten una correspondencia inequívoca. Los casos inciertos quedan como ajustes pendientes de reasignación. Los tramos de inversión de CAJA se conservan como rescates pendientes de asignar a una posición y una cuenta receptora; no se convierten automáticamente en ingresos. Los vínculos MANUAL existentes requieren revisar su destino si dejó de estar presente.
+
+Esta primera etapa no aplica decisiones ERP a una nueva importación del formato CAJA. Si se vuelve a ese formato, las decisiones ERP siguen consultables en su lote histórico; continuar la operación migrada requiere mantener ERP como entrada y revisar las correspondencias al volver a cambiar de perfil.
+
+Las reglas siguientes describen el comportamiento heredado de CAJA/BASE:
 
 BANCO, CLIENTES y COLOCACIONES se reemplazan como conjunto del nuevo lote. Los registros ausentes de la nueva BASE dejan de participar en esa fotografía; se conserva su historial. No se deduce que un documento desaparecido esté pagado.
 
@@ -234,7 +270,7 @@ Si puedes importar pero no eliminar, la pantalla indica cuando falta el permiso 
 
 En **Importaciones**, Tesorería y Administrador con segundo factor y permiso de eliminación pueden usar **Eliminar** en la fila de un Excel o **Vaciar Excel** para retirar todas las cargas Excel, incluidas las antiguas. El historial permite consultar todos los lotes disponibles, no solo los 30 más recientes.
 
-Antes de borrar, el diálogo consulta el servidor y muestra archivos, filas, MANUAL afectado y cuál será la última BASE restante. Debes escribir `ELIMINAR` para un archivo o `VACIAR EXCEL` para todos. Si alguien importa o edita después de esa revisión, la confirmación se rechaza y debes volver a revisar.
+Antes de borrar, el diálogo consulta el servidor y muestra archivos, filas, MANUAL y decisiones de negocio afectados, y cuál será la última BASE restante. Debes escribir `ELIMINAR` para un archivo o `VACIAR EXCEL` para todos. Si alguien importa o edita después de esa revisión, la confirmación se rechaza y debes volver a revisar.
 
 El borrado es definitivo y transaccional: elimina el lote, sus filas, sus vínculos y su espacio MANUAL, incluidas las ediciones realizadas en esa fecha. En las versiones antiguas también retira las trazas y entidades financieras atribuibles exclusivamente a esas cargas. Un movimiento antiguo marcado expresamente como Excel sin lote se incluye en el vaciado completo. No se adivina la procedencia de registros sin trazabilidad.
 
@@ -256,7 +292,7 @@ El diálogo también cuenta escenarios, previsiones congeladas, tareas, comentar
 
 ### Contrato funcional y aceptación
 
-La especificación visual original describía un MVP con datos ficticios. La operación actual utiliza datos autorizados de BASE; los datos ficticios se reservan para pruebas y demostraciones. La precisión de los cálculos tiene prioridad sobre ampliar el diseño o agregar indicadores. Los módulos son vistas del mismo modelo y no justifican volver a importar otras pestañas del libro.
+La especificación visual original describía un MVP con datos ficticios. La operación actual utiliza datos autorizados de BASE; los datos ficticios se reservan para pruebas y demostraciones. La precisión de los cálculos tiene prioridad sobre ampliar el diseño o agregar indicadores. Los módulos son vistas del mismo modelo compuesto. Las hojas de cálculo de CAJA sirven para verificar su funcionalidad, no como requisito del ERP crudo.
 
 | Concepto | Regla operativa |
 | --- | --- |
@@ -275,6 +311,14 @@ La especificación visual original describía un MVP con datos ficticios. La ope
 **Regla pendiente de aceptación operativa:** el motor vigente mueve pendientes con fecha igual o anterior al corte al primer día proyectado. Es una hipótesis heredada, compartida por las vistas, y no evidencia de cobro/pago mañana. Debe acordarse su sustitución por pendientes sin fecha y reprogramación explícita antes de certificar casos de vencidos. El archivo original con corte 11-09-2026 no tiene pendientes planificados al corte que prueben esa política; no se cambió silenciosamente con esta corrección.
 
 ### Fórmulas y presentación
+
+**En ERP, caja disponible = apertura bancaria + cargos − abonos hasta el corte, por moneda y cuenta.** Las aperturas participan en el saldo, pero no en los ingresos y egresos brutos del período. La inversión se obtiene del saldo OB y sus movimientos firmados. Una posición de inversión **no es un vencimiento**: no se inventan fecha de rescate, tasa ni interés.
+
+Los rescates programados reservan capital sin disminuir el saldo contable importado. Solo el monto programado participa en el flujo futuro. Ejecutar o cancelar un plan lo retira del flujo y libera su reserva; el movimiento real debe llegar por ERP. No hay conciliación automática de una ejecución. Si un nuevo ERP reduce el capital por debajo de lo reservado, los rescates quedan bloqueados como borradores y se muestra un aviso hasta revisarlos.
+
+Las reglas de cobro desplazan el vencimiento por días naturales y pueden asignar cuenta receptora; las reglas de clasificación aplican categorías por texto de descripción. Se aplican por prioridad ascendente (el mayor número prevalece; empates por identificador estable). Un ajuste explícito tiene prioridad sobre las reglas. Se conserva el vencimiento contractual y cada decisión tiene revisión, autor y auditoría. No se configura automáticamente una política general de cinco días: requiere crear la regla.
+
+La fórmula siguiente corresponde a CAJA/BASE:
 
 **Caja disponible = suma con signo de REAL de las filas BANCO de la BASE seleccionada, hasta el corte.** La apertura ya contenida en esas filas no se añade otra vez. No hay un límite fijo en la fila 5765: se considera el origen y la fecha.
 
@@ -309,6 +353,7 @@ Los intereses desconocidos no se inventan. BASE puede generar advertencias en CO
 | `daily_base_batches` | Archivo, huella única, corte, origen Excel/SAP, autor, estado y recuentos |
 | `daily_base_rows` | Filas originales e información normalizada de cada lote; datos ERP inmutables |
 | `daily_manual` | Trabajo MANUAL por lote, revisión de edición y marca de eliminación |
+| `treasury_business_decisions` | Ajustes, reglas y rescates por lote, identidad estable, revisión y autor |
 | `daily_forecast_links` | Relaciones para evitar doble proyección entre MANUAL y ERP |
 | `profiles`, `audit_logs`, `fx_rates` | Usuarios/roles, trazabilidad de operaciones y tipos de cambio |
 | Tablas anteriores de importación y entidades | Compatibilidad e historial conservado de las versiones previas |
@@ -317,9 +362,11 @@ No elimines tablas históricas por su nombre: las migraciones, compatibilidad y 
 
 | RPC | Uso |
 | --- | --- |
+| `compare_erp_import`, `import_erp_daily` | Comparación y guardado atómico del perfil ERP crudo |
+| `treasury_save_business` | Guardar, reasignar o retirar decisiones con permisos, MFA, revisión y auditoría |
 | `compare_daily_base` | Validar y comparar la BASE propuesta; devuelve revisión y cambios |
 | `import_daily_base` | Guardar Excel completo, preservando MANUAL según selección |
-| `get_daily_base_snapshot` | Leer ERP y MANUAL del lote seleccionado o del último |
+| `get_daily_base_snapshot` | Componer ERP, MANUAL, ajustes, reglas y rescates; conserva originales y contexto de negocio |
 | `save_daily_manual` | Crear, editar o eliminar MANUAL con revisión y auditoría |
 | `link_daily_forecast` | Crear o retirar la relación MANUAL/ERP |
 | `get_daily_import_status` | Métricas e historial de las entregas guardadas |
@@ -350,6 +397,8 @@ Las importaciones y las modificaciones MANUAL usan transacciones y control de re
 | `20260917010000000_sap_daily_receiver.sql` | RPC SAP de servidor y estado de importaciones |
 | `20260918000000000_delete_excel_imports.sql` | Eliminación de Excel, control de revisión y limpieza de dependencias |
 | Cuatro migraciones `20260919...` | Admisión, decisiones, conciliación y operaciones; orden exacto en sección 18 |
+| `20260926000000000_erp_raw_import.sql` | Coordenadas por hoja, contrato crudo, importación idempotente y conservación de MANUAL |
+| `20260926010000000_business_planning.sql` | Decisiones versionadas, reglas, posiciones, rescates y composición de consultas |
 
 **La limpieza de archivos de documentación no requiere ejecutar SQL.** La opción Eliminar Excel sí requiere la migración del 18 de septiembre si todavía no está aplicada. No repitas migraciones ya instaladas. Algunas crean objetos una sola vez y los archivos `cleanup_*` contienen borrados: conservarlos no significa volver a ejecutarlos sobre datos reales.
 
@@ -494,11 +543,17 @@ TEST_PREVIEW=1 npx --yes pnpm@11.19.0 test:e2e
 
 Las pruebas SQL usan PostgreSQL aislado en PGlite. El navegador intercepta la API del host Supabase original y usa fixtures/PGlite: no importa ni borra datos de producción. No cambies sus destinos por credenciales reales sin adaptar el aislamiento.
 
-- **163 pruebas de lógica, SQL y operaciones aprobadas**: incluye fecha de corte explícita, bloqueo de fechas de planificación inválidas, importes separados por moneda, repetición sin duplicación e historia inmutable, además de BASE, día siguiente, MANUAL, borrados, MFA, admisión, previsiones, escenarios, recurrencias, conciliación, tasas históricas, identidad SAP, paginación incompleta y protección de respaldos.
+**Entrega ERP y planificación (26/09/2026):** 180 pruebas de lógica/SQL aprobadas; TypeScript correcto; ESLint sin errores (cinco advertencias heredadas); control estático y build de producción correctos. Tres pruebas de navegador sobre ese build cubren importación ERP, ajuste de cobranza, rescate parcial, presentación móvil y regresión de corte/guardado CAJA. Las pruebas nuevas también cubren capital insuficiente después de reimportar, concurrencia, conservación de decisiones, previsiones congeladas e importaciones históricas.
+
+Se verificaron localmente los archivos reales recibidos: los ocho saldos bancarios CLP coinciden entre ERP y CAJA al mismo corte analítico. Una prueba de transición con corte declarado exclusivamente para ese ensayo conservó los 43 movimientos MANUAL; recuperó 60 correspondencias de factura y dejó diez ajustes y ocho rescates pendientes de asignación. Este ensayo no certifica la fecha de extracción ERP ni equivalencia completa de las proyecciones. No se modificaron los archivos originales, no se aplicó SQL productivo y no se ejecutaron jobs de GitHub.
+
+La evidencia siguiente corresponde a versiones anteriores:
+
+- **Evidencia de la versión anterior (23/09/2026): 163 pruebas de lógica, SQL y operaciones aprobadas**: incluye fecha de corte explícita, bloqueo de fechas de planificación inválidas, importes separados por moneda, repetición sin duplicación e historia inmutable, además de BASE, día siguiente, MANUAL, borrados, MFA, admisión, previsiones, escenarios, recurrencias, conciliación, tasas históricas, identidad SAP, paginación incompleta y protección de respaldos.
 - TypeScript y compilación de producción correctos; ESLint sin errores, con cinco advertencias heredadas de Fast Refresh.
 - **15 pruebas de navegador aprobadas al incorporar el perfil de lectura** sobre el build de producción: plantilla en Configuración/vista previa, estructura rechazada sin sustituir BASE, dos Excel, MANUAL, historial, borrado, conciliación, coherencia de Resumen, móvil y rutas. Las pruebas específicas de decisiones/exportaciones se aprobaron en la entrega previa y no se repitieron para ese cambio del lector.
 - **Corrección del acceso a eliminar Excel (23/09/2026):** se repitieron `check` (154 pruebas, TypeScript y ESLint sin errores) y `build`; pasaron seis pruebas de navegador sobre producción (`daily.spec.ts` y `excel-management.spec.ts`). Cubren el selector móvil, columnas ocultas, cancelar/confirmar, recuperación de la BASE anterior, recálculo de caja, vaciado y reimportación, bloqueo de cuentas sin permiso y actualización del permiso concedido por otro administrador. No requieren ejecutar jobs en GitHub ni modificar la base productiva.
-- **Conciliación funcional del original (23/09/2026):** se leyó BASE sin modificar el XLSM y se aplicó corte explícito 11-09-2026. En CLP se compararon los once saldos guardados de `PROYECTADO DIARIO $!C29:M29` (del 11 al 30 de septiembre) con la serie del motor: once coincidencias exactas. La otra hoja se consultó solo para esta auditoría local; la aplicación sigue importando exclusivamente BASE. AE7 contiene `TODAY()` con resultado guardado 12-09-2026, por lo que no certifica la fecha contable. Esta evidencia corresponde al archivo recibido y no certifica archivos posteriores ni conciliación bancaria independiente.
+- **Conciliación funcional del original (23/09/2026):** se leyó BASE sin modificar el XLSM y se aplicó corte explícito 11-09-2026. En CLP se compararon los once saldos guardados de `PROYECTADO DIARIO $!C29:M29` (del 11 al 30 de septiembre) con la serie del motor: once coincidencias exactas. La otra hoja se consultó solo para esta auditoría local; esa versión importaba exclusivamente BASE. AE7 contiene `TODAY()` con resultado guardado 12-09-2026, por lo que no certifica la fecha contable. Esta evidencia corresponde al archivo recibido y no certifica archivos posteriores ni conciliación bancaria independiente.
 - **Fecha de corte editable (23/09/2026):** `check` pasó con 163 pruebas y `build` terminó correctamente. Pasaron once pruebas de navegador sobre el build de producción (`import-cutoff`, `daily`, `projection`, `reading-profile` y `excel-management`): fecha explícita, fórmulas/errores en AE7, cambio de fecha antes de confirmar, rechazo de N inválida, segunda carga, repetición, historial, MANUAL, recálculo, eliminación, roles y coherencia entre Resumen y Flujo. Toda la verificación fue local; no se ejecutaron jobs de GitHub ni SQL productivo.
 - El **XLSM original recibido** se volvió a comprobar: 1.781 registros, cero errores de filas y siete advertencias ya existentes. El archivo no se modificó. Encabezados en fila 8 y movimientos entre filas 9 y 6078. La nueva importación exige confirmar el corte porque AE7 contiene una fórmula; las filas conservan ahora ese contexto de elección. No se ha recibido ni probado el archivo real del 22; los casos 17/18/22 son sintéticos.
 - No se ejecutaron conexiones reales a SAP/OpenAI ni respaldos/restauraciones productivos. Las pruebas de sus contratos y controles no sustituyen la aceptación con TI.
@@ -517,7 +572,9 @@ Ese esperado corresponde solo al libro original recibido. Para otro libro propor
 | --- | --- |
 | `Cannot read properties of undefined (reading 'digest')` | Publicar la corrección SHA-256 y recargar; `file-hash.ts` debe estar incluido en el worker |
 | Error antiguo «excede el área de lectura» por formato vacío | Revisar versión desplegada y lectura exclusiva BASE; no recortar el libro para corregir dimensiones de formato |
-| «No se encontró BASE» | Seleccionar el libro correcto; el importador no usará otras hojas como alternativa |
+| Falta BASE o un encabezado ERP | Verificar el perfil: CAJA requiere BASE; ERP requiere BANCOS, CLIENTES y COLOCACIONES con los encabezados del contrato |
+| ERP no permite confirmar | Declarar corte y ambos períodos, aplicar cobertura y corregir todas las filas con error |
+| Rescate fuera de cobertura o superior al capital | Revisar la posición y la cuenta receptora; actualizar estado de planes ejecutados o reasignar sin alterar el original ERP |
 | «La plantilla espera…» o «encabezados esperados» | Comparar la celda indicada con Configuración → Plantilla de lectura Excel; un cambio real de formato necesita revisar el perfil, no reasignar columnas por suposición |
 | AE7 contiene una fórmula/error o falta definir el corte | En la vista previa, indicar Fecha de corte y pulsar Aplicar fecha de corte. No es necesario editar el libro |
 | El corte es anterior al último movimiento BANCO | Usar el corte correspondiente a esos datos; para consultar un día anterior, seleccionar su BASE histórica |
@@ -546,7 +603,8 @@ Para informar un error, incluye mensaje completo, ruta de pantalla, versión des
 | `src/components/ui/` | Componentes compartidos Radix/shadcn |
 | `src/pages/` | Pantallas; `importations/`, `projections/` y `dashboard/` agrupan lógica específica |
 | `src/pages/importations/DeleteImportsDialog.tsx` | Revisión del alcance y confirmación del borrado de Excel |
-| `src/import-engine/` | Lectura BASE, normalización, validación, contratos y huella |
+| `src/import-engine/` | Lectores CAJA/BASE y ERP crudo, normalización, validación, contratos y huella |
+| `src/pages/planning/`, `src/services/planningService.ts` | Gestión de reglas, ajustes y rescates sobre datos crudos |
 | `src/import-engine/base-profile.ts` | Contrato único de columnas, encabezados, variantes y celda de corte; compartido con Configuración y vista previa |
 | `src/workers/xlsx.worker.ts` | Análisis y SHA-256 fuera del hilo principal |
 | `src/services/importService.ts` | Ciclo del worker, comparación, confirmación y errores |
@@ -591,7 +649,10 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 
 | Estado | Alcance |
 | --- | --- |
-| Implementado | BASE diaria, historial, ERP de solo lectura, MANUAL editable, borrado revisado y recálculo |
+| Implementado | ERP crudo de tres hojas y CAJA/BASE, historial, originales de solo lectura, MANUAL y decisiones versionadas |
+| Implementado | Fechas previstas de cobro, clasificación, posiciones de inversión y reservas para rescates parciales |
+| Pendiente de aceptación | Aplicar las dos migraciones del 26/09 en el entorno destino y revisar decisiones iniciales contra CAJA |
+| Migración progresiva | Reglas adicionales y cálculos auxiliares de CAJA que no estén representados por esta primera etapa |
 | Implementado | Plantilla de lectura SONACOL BASE v1 visible en Configuración y vista previa; validación de estructura con filas variables |
 | Implementado | Hoy, tareas, diferencias, escenarios aislados, previsiones congeladas y precisión observada |
 | Implementado | Agenda semanal/mensual, recurrencias, excepciones, comentarios y adjuntos |
@@ -603,23 +664,9 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 | Preparado para TI | Scripts de respaldo y restauración; falta configurar y comprobar infraestructura |
 | No incluido | Archivo binario original del Excel en Storage, modo offline completo, multiempresa, traducción completa, pagos bancarios ejecutables o aprendizaje automático predictivo |
 
-La plataforma de decisiones ya se integró en `main`. La rama `feat/perfil-lectura-base` incluye la coherencia de Resumen de `fix/resumen-base-coherente`, el perfil de lectura, el acceso visible a eliminar Excel y la fecha de corte editable al importar. También muestra controles por origen/moneda y rechaza fechas de planificación inválidas. No añade migraciones ni cambia la política de pendientes, la fórmula diaria o la conservación de MANUAL. Subir código a GitHub no publica el frontend.
+La etapa actual está preparada en `feat/erp-business-layers`, sobre el repositorio `Ignvco/sonacol-treasury`. A diferencia de la entrega de perfil BASE del 23/09, **sí requiere dos migraciones nuevas**. La sección 25 detalla su activación. GitHub Actions permanece exclusivamente manual: no se ejecutan jobs como parte de esta entrega.
 
-Para revisar ambas mejoras desde una instalación que ya funciona con la plataforma de decisiones:
-
-```bash
-git status
-git fetch origin
-git switch feat/perfil-lectura-base
-git pull --ff-only origin feat/perfil-lectura-base
-npx --yes pnpm@11.19.0 install --frozen-lockfile
-npx --yes pnpm@11.19.0 check
-npx --yes pnpm@11.19.0 build
-```
-
-Conserva los cambios locales antes de cambiar de rama. No ejecutes SQL adicional para esta corrección ni vuelvas a aplicar las migraciones anteriores. Las pruebas locales incluyen BASE 17/18/22, repetición del archivo, corrección del mismo día, histórico, conservación de MANUAL, igualdad con la serie diaria previa y coherencia de filtros en navegador. GitHub Actions permanece exclusivamente manual; este trabajo no requiere ejecutar jobs.
-
-Si vienes de la versión anterior `fix/base-diaria`, la instalación completa de la plataforma sí requiere las cuatro migraciones de la sección siguiente, una sola vez.
+Si vienes de `fix/base-diaria`, instala primero las dependencias de la plataforma de decisiones descritas en la sección siguiente. Las secciones históricas conservan el contexto de las entregas anteriores.
 
 ## 18. Actualizar desde fix/base-diaria
 
@@ -628,7 +675,7 @@ Si vienes de la versión anterior `fix/base-diaria`, la instalación completa de
 Desde la carpeta de tu proyecto, revisa `git status`. Conserva tus cambios locales antes de cambiar de rama; no uses reset ni fuerces parches sobre una versión distinta.
 
 ```bash
-cd "$HOME/Documents/Developer/sonaco-treasury-main"
+cd "$HOME/Documents/Developer/sonacol-treasury"
 git status
 git fetch origin
 git switch feat/treasury-decision-platform
@@ -713,7 +760,7 @@ Comentarios y adjuntos pertenecen al MANUAL del lote. Los adjuntos admiten PDF/P
 
 Límites de cartola: 10 MiB, 20.000 movimientos y 100 columnas. Se conservan partidas iguales mediante su multiplicidad; los archivos repetidos no duplican movimientos. Los emparejamientos validan cuenta, moneda, dirección, suma y disponibilidad bajo bloqueo transaccional. No se puede consumir de nuevo una partida desde otra fotografía del mismo asiento ERP. Si cambia su moneda/cuenta/dirección, primero se exige revisar y revertir la conciliación previa.
 
-Una diferencia de saldos se presenta solo con cortes iguales. La cartola no modifica la caja BASE ni convierte documentos en pagados. No se conecta al banco ni ejecuta transferencias. El importador de tesorería continúa leyendo exclusivamente BASE; el formato adicional CSV corresponde únicamente a esta evidencia bancaria.
+Una diferencia de saldos se presenta solo con cortes iguales. La cartola no modifica la caja BASE ni convierte documentos en pagados. No se conecta al banco ni ejecuta transferencias. El importador de tesorería admite ERP crudo o CAJA/BASE; el formato CSV de cartola corresponde únicamente a evidencia bancaria independiente.
 
 ## 21. Informes y asistente
 
@@ -808,3 +855,33 @@ Los ejemplos `sonacol-backup.service/.timer` ejecutan el respaldo a las 02:00 de
 - Operaciones: `scripts/`, Edge Functions y migraciones del 19 de septiembre.
 
 Documentación técnica de referencia: [Supabase MFA](https://supabase.com/docs/guides/auth/auth-mfa), [SAP Service Layer](https://help.sap.com/doc/056f69366b5345a386bb8149f1700c19/10.0/en-US/Service%20Layer%20API%20Reference.html), [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [pdf-lib](https://pdf-lib.js.org/docs/api/classes/pdfdocument).
+
+
+## 25. Activar ERP y planificación
+
+Esta entrega implementa la primera etapa funcional; no acredita que se haya publicado el frontend ni aplicado SQL productivo. El código y las migraciones deben actualizarse juntos. No requiere jobs de GitHub.
+
+1. Obtén la rama en el nuevo repositorio, conservando tus cambios locales:
+
+```bash
+git status
+git fetch origin
+git switch feat/erp-business-layers
+git pull --ff-only origin feat/erp-business-layers
+npx --yes pnpm@11.19.0 install --frozen-lockfile
+npx --yes pnpm@11.19.0 check
+npx --yes pnpm@11.19.0 build
+```
+
+2. En una copia aislada con las migraciones anteriores instaladas, aplica **una sola vez y en orden**:
+
+```text
+supabase/migrations/20260926000000000_erp_raw_import.sql
+supabase/migrations/20260926010000000_business_planning.sql
+```
+
+3. Verifica la migración CAJA → ERP: selecciona fechas de corte comparables, revisa cobertura, confirma que MANUAL se mantiene y resuelve los ajustes y rescates pendientes en Planificación. No certifica equivalencia comparar saldos de cortes distintos. La correspondencia por nombres de clientes diferentes requiere revisión explícita.
+4. Crea una regla de cobro y un ajuste particular; confirma que cambia la fecha prevista y se conserva el vencimiento original. Programa un rescate parcial y comprueba capital, reserva, remanente y flujo diario. Reimporta ERP y revisa que las decisiones se mantienen y la versión anterior sigue intacta.
+5. Tras aceptar esa copia, aplica las migraciones pendientes al entorno destino con su procedimiento de respaldo y publica el frontend compatible con el alojamiento habitual.
+
+Los mayores ERP solo acreditan las cuentas y monedas presentes en la exportación. El perfil no identifica automáticamente el instrumento individual dentro de una misma cuenta contable, ni concilia un rescate planeado con una transacción real. Estas correspondencias deben confirmarse antes de ampliar la automatización. Los libros reales y sus datos financieros no forman parte del repositorio; las pruebas versionadas usan ejemplos anónimos.

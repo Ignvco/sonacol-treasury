@@ -6,6 +6,9 @@ import { classifyCategory, classifyType, normalizeBankName, normalizeCurrency, n
 import { MAX_IMPORT_ROWS, type BaseReadingSummary, type DetectedColumn, type ImportSummary, type ProcessedRecord, type SheetResult, type ImportOverrides } from "./types";
 import { validateRecord } from "./validate";
 import { resolveBaseCutoff } from "./cutoff";
+import { erpSheetNames, ERP_PROFILE } from "./erp-profile";
+import { readErp } from "./erp";
+import { nextDate } from "@/financial-engine/base-treasury";
 
 export interface WorkSheetData {
   reading?: BaseReadingSummary;
@@ -35,13 +38,16 @@ export async function parseWorkbook(buffer: ArrayBuffer, baseOnly = true): Promi
   if (!(bytes[0] === 0x50 && bytes[1] === 0x4b) && !(bytes[0] === 0xd0 && bytes[1] === 0xcf))
     throw new Error("El contenido no corresponde a un libro Excel válido. Abre el archivo en Excel y guárdalo como .xlsx.");
   const metadata = XLSX.read(buffer, { type: "array", bookSheets: true });
-  const baseName = baseOnly ? findBaseSheet(metadata.SheetNames) : null;
+  const hasBase = metadata.SheetNames.some(n => n.trim().toUpperCase() === "BASE");
+  const erpNames = baseOnly && !hasBase ? erpSheetNames(metadata.SheetNames) : null;
+  const baseName = baseOnly && !erpNames ? findBaseSheet(metadata.SheetNames) : null;
   const wb = XLSX.read(buffer, {
-    ...(baseName ? { sheets: [baseName] } : {}),
+    ...(baseName ? { sheets: [baseName] } : erpNames ? { sheets: [...erpNames.values()] } : {}),
     type: "array", dense: false, cellDates: false, bookVBA: false,
     cellFormula: true, sheetStubs: false, cellStyles: false,
   });
   if (baseName) return readSonacol(wb, baseName);
+  if (erpNames) return readErp(wb, erpNames);
   const sheets: WorkSheetData[] = [];
   let cells = 0;
   for (const name of wb.SheetNames) {
@@ -80,7 +86,9 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
   const seen = new Set<string>();
   for (const [sheetIndex, sheet] of sheets.entries()) {
     onProgress?.(sheetIndex + 1, sheets.length, `Analizando hoja “${sheet.name}”…`);
-    const override = overrides[sheet.name] ?? {};
+    const isErp = sheet.profile === ERP_PROFILE;
+    const override = isErp ? overrides.ERP ?? {} : overrides[sheet.name] ?? {};
+    if (isErp && override.skip) throw new Error("El perfil ERP se importa completo; no se pueden omitir hojas.");
     if (sheet.prepared) {
       const reading = sheet.reading ? resolveBaseCutoff(sheet.reading, override) : undefined;
       sheetResults.push({name:sheet.name,headerIndex:sheet.headerIndex??1,columns:[],dataRows:override.skip?0:sheet.prepared.length,entityType:sheet.prepared[0]?.entityType??"unknown",profile:sheet.profile,note:sheet.note,reading});
@@ -92,6 +100,18 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
           workbookCutoff: reading.workbookCutoff,
           cutoffFormula: reading.cutoffFormula,
         });
+        if (isErp && reading) {
+          if (!record.normalized.currency) record.normalized.currency = reading.localCurrency;
+          Object.assign(record.normalized, { company: reading.company, periodStart: reading.periodStart, localCurrency: reading.localCurrency, coverageSheets: ["BANCOS", "CLIENTES", "COLOCACIONES"] });
+          if (String(record.normalized.recordRole).endsWith("_opening") && reading.periodStart && !reading.cutoffIssue)
+            record.normalized.date = nextDate(reading.periodStart, -1);
+          const date = record.normalized.date;
+          const issues: string[] = [];
+          if (record.normalized.currency !== reading.localCurrency) issues.push("La moneda de la fila no coincide con la moneda local declarada.");
+          if (String(record.normalized.recordRole).endsWith("_movement") && date && reading.periodStart && String(date) < reading.periodStart)
+            issues.push("Movimiento anterior al inicio del período declarado.");
+          if (issues.length) { record.status = "ERROR"; record.warnings = [record.warnings, ...issues].filter(Boolean).join(" · "); }
+        }
         if(record.status!=="ERROR") {
           if(seen.has(record.dedupeKey)) {record.status="DUPLICATE";record.warnings="Fila idéntica a otra del archivo.";}
           else seen.add(record.dedupeKey);

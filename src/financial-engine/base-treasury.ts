@@ -26,7 +26,7 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
   const matches = (r: TreasuryRow) => (currency === "BASE" || r.currency === currency) && (!bank || r.bank === bank);
   const sign = (r: TreasuryRow) => r.type === "expense" ? -r.amount : r.amount;
   const cashRows = rows.filter(r => r.inLatest !== false && r.kind === "cash_flow" && r.origin === "BANCO" && r.date <= cutoff && matches(r));
-  const allFuture = rows.filter(r => r.inLatest !== false && (r.kind !== "cash_flow" || r.origin === "PLATAFORMA") && !["pagado","conciliado","rescatada","cancelado","borrador"].includes(r.status));
+  const allFuture = rows.filter(r => r.inLatest !== false && r.normalized?.isPosition !== true && (r.kind !== "cash_flow" || r.origin === "PLATAFORMA") && !["pagado","conciliado","rescatada","cancelado","borrador"].includes(r.status));
   const byKey = new Map(rows.map(r => [sourceKey(r), r]));
   const suppressed = new Set<string>();
   const replacement = new Map<string,string>();

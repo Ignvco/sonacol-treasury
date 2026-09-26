@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarClock, CalendarRange, Percent, PiggyBank, Wallet, X } from "lucide-react";
 import { useAsyncData } from "@/hooks/use-async";
 import { dataService } from "@/services/dataService";
@@ -42,7 +43,7 @@ export default function Investments() {
     const active = items.filter((i) => i.status !== "rescatada");
     const dueSoon = items.filter((i) => {
       const d = daysUntil(i.endDate);
-      return i.status !== "rescatada" && d >= 0 && d <= 30;
+      return !!i.endDate && i.status !== "rescatada" && d >= 0 && d <= 30;
     });
     return {
       total: active.reduce((a, i) => a + i.amount, 0),
@@ -69,14 +70,14 @@ export default function Investments() {
     Estado: INVESTMENT_STATUS_LABEL[i.status],
   }));
 
-  const schedule = items.filter((i) => i.status !== "rescatada");
+  const schedule = items.filter((i) => i.status !== "rescatada" && i.endDate);
 
   return (
     <div className="t-fade-in flex flex-col gap-5">
       <PageHeader
         title="Inversiones"
         subtitle="COLOCACIONES · Datos del ERP de solo lectura"
-        actions={<ExportMenu rows={exportRows} filename="inversiones" />}
+        actions={<><Link className="t-button-secondary" to="/planning">Programar rescates</Link><ExportMenu rows={exportRows} filename="inversiones" /></>}
       />
 
       <BentoStats
@@ -193,7 +194,7 @@ export default function Investments() {
                 const d = daysUntil(i.endDate);
                 return (
                   <span className={cn("t-num text-[12px] font-semibold", d <= 30 && d >= 0 ? "text-warning" : d < 0 ? "text-muted-foreground" : "text-foreground")}>
-                    {i.status === "rescatada" ? "—" : d >= 0 ? d : "Vencida"}
+                    {!i.endDate ? "Sin programar" : i.status === "rescatada" ? "—" : d >= 0 ? d : "Vencida"}
                   </span>
                 );
               },
@@ -231,7 +232,7 @@ export default function Investments() {
                 <span className="text-[12px] text-muted-foreground">Estado</span>
                 <StatusBadge label={INVESTMENT_STATUS_LABEL[selected.status]} />
               </div>
-              <p className="text-sm text-muted-foreground">COLOCACIONES proviene del ERP y es de solo lectura. Registra ajustes de planificación en Proyecciones MANUAL.</p>
+              <p className="text-sm text-muted-foreground">La posición proviene de ERP. Programa rescates parciales y revisa el capital reservado en Planificación y reglas.</p>
             </div>
           )}
         </DialogContent>

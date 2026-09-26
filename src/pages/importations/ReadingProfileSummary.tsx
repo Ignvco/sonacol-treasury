@@ -7,6 +7,11 @@ export function ReadingProfileSummary({
 }: {
   reading: BaseReadingSummary;
 }) {
+  if (reading.profileId === "ERP-RAW-v1") return <section aria-label="Estructura ERP reconocida" className="mb-3 rounded-xl border bg-sunken p-4 text-sm">
+    <h3 className="font-semibold">ERP · {reading.sheetName}</h3>
+    <p>Encabezados en fila {reading.headerRow} · datos entre filas {reading.firstDataRow ?? "—"} y {reading.lastDataRow ?? "—"}.</p>
+    <p className="mt-1 text-xs text-muted-foreground">Período declarado: {reading.periodStart ?? "pendiente"} a {reading.cutoff ?? "pendiente"} · {reading.localCurrency ?? "CLP"}. Último dato fechado: {reading.lastBankDate ?? "—"}.</p>
+  </section>;
   return (
     <section
       aria-label="Estructura de Excel reconocida"

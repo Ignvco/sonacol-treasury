@@ -27,6 +27,19 @@ project-root/
 
 ## Directory Responsibilities
 
+- **src/import-engine/erp-profile.ts**: Versioned raw ERP report headers and sheet detection.
+- **src/import-engine/erp.ts**: ERP cells, openings, movements, invoices and investment ledger validation; preserves original coordinates and repeated lines. Business planning is separate from this reader.
+- **tests/helpers/erp-workbook.ts**: Anonymous raw ERP workbook fixtures. `erp-import.test.ts` checks parsing and `erp-database.test.ts` checks atomic persistence and preserved manual work against PostgreSQL.
+- **src/pages/importations/ErpImportContext.tsx**: Declared company, local currency, cutoff and separate bank/investment reporting periods for raw ERP imports.
+- **supabase/migrations/20260926000000000_erp_raw_import.sql**: Guarded ERP contract, stable identities, multi-sheet coordinates and atomic daily refresh with MANUAL preservation.
+- **supabase/migrations/20260926010000000_business_planning.sql**: Versioned business decisions, invoice adjustments, classification/collection rules, investment positions and partial redemptions. The snapshot RPC composes these layers while keeping raw ERP rows immutable.
+- **src/services/planningService.ts**: Guarded business-decision loading and versioned writes.
+- **src/pages/planning/index.tsx**: Planning workspace: positions, reservations, collections, rules and unresolved decisions.
+- **src/pages/planning/DecisionDialog.tsx**: Edits operational adjustments, partial redemptions and explicit business rules, separately from imported facts.
+- **tests/business-planning.test.ts**: Real PostgreSQL tests for immutable ERP, rule precedence, partial reservations, optimistic concurrency, daily carry and historical calculations.
+- **tests/browser/erp-planning.spec.ts**: Browser acceptance of raw ERP import, operational due-date adjustment, partial rescue and mobile presentation using an isolated database.
+- **src/components/treasury/ErpCoverageNotice.tsx**: Shared coverage and unresolved planning notice for financial screens using raw ERP data.
+
 - **public/**: Static files served directly. Place images, icons, and robots.txt here.
 - **public/locales/**: Translation files, one per language (`{code}.json`). Flat dotted keys (e.g. `home.hero.title`); the `fallbackLng` file is the structural source of truth.
 - **i18n.config.json**: The lightweight i18n manifest for fallback language, language labels, browser detection aliases, and document direction. Single source of truth for the language list.

@@ -1,3 +1,4 @@
+import { ErpImportContext } from "./ErpImportContext";
 import { useAuth } from "@/contexts/auth-context";
 import { ReadingProfileSummary } from "./ReadingProfileSummary";
 import { ImportCutoff } from "./ImportCutoff";
@@ -76,6 +77,8 @@ export function ImportPreview({
   const { user } = useAuth();
   const baseSheet = preview.sheets.find((sheet) => sheet.reading);
   const reading = baseSheet?.reading;
+  const isErp = reading?.profileId === "ERP-RAW-v1";
+  const [contextDirty, setContextDirty] = useState(false);
   const [cutoffDate, setCutoffDate] = useState(reading?.cutoff ?? "");
   const cutoffIssue = importCutoffIssue(preview);
   const cutoffDirty = cutoffDate !== reading?.cutoff;
@@ -83,9 +86,10 @@ export function ImportPreview({
   const [selected, setSelected] = useState<number[]>([]);
   const [filter, setFilter] = useState(""),
     [reviewed, setReviewed] = useState(false);
-  const byRow = new Map(comparison.map((r) => [r.row, r]));
+  const coordinate = (r: { sheet?: string; row: number }) => (r.sheet ?? baseSheet?.name ?? "BASE") + ":" + r.row;
+  const byRow = new Map(comparison.map((r) => [coordinate(r), r]));
   const data = preview.records.filter(
-    (r) => !filter || byRow.get(r.row)?.change === filter,
+    (r) => !filter || byRow.get(coordinate(r))?.change === filter,
   );
   const newCount = comparison.filter((r) => r.change === "new").length;
   const automatic = comparison.filter(
@@ -108,7 +112,9 @@ export function ImportPreview({
         title="Compara tu Excel antes de actualizar"
         subtitle={preview.fileName}
       >
-        {reading && <ImportCutoff reading={reading} value={cutoffDate} issue={cutoffIssue} busy={busy}
+        {isErp && <ErpImportContext initial={applied.ERP} busy={busy} onDirty={() => { setContextDirty(true); setReviewed(false); }} onApply={ERP => onAnalyze({ ...applied, ERP })} />}
+        {isErp && cutoffIssue && <p role="alert" className="mb-4 text-sm text-danger">{cutoffIssue}</p>}
+        {reading && !isErp && <ImportCutoff reading={reading} value={cutoffDate} issue={cutoffIssue} busy={busy}
           onChange={(date) => { setCutoffDate(date); setReviewed(false); }}
           onApply={() => {
             setReviewed(false);
@@ -129,10 +135,7 @@ export function ImportPreview({
           ))}
         </div>
         <p className="mb-4 rounded-xl bg-brand-soft p-4 text-sm">
-          Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los
-          datos completos de esta fecha. MANUAL conserva tus ediciones de la
-          plataforma; selecciona únicamente las que quieras reemplazar con el
-          Excel.
+          {isErp ? "Se leen los datos crudos de BANCOS, CLIENTES y COLOCACIONES. La plataforma conserva tus movimientos manuales, reglas y ajustes y genera las proyecciones. Los saldos de apertura no se consideran ingresos del período." : "Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los datos completos de esta fecha. MANUAL conserva tus ediciones; selecciona únicamente las que quieras reemplazar con el Excel."}
         </p>
         {preview.sheets
           .filter((sheet) => sheet.reading)
@@ -140,6 +143,9 @@ export function ImportPreview({
             <ReadingProfileSummary key={sheet.name} reading={sheet.reading!} />
           ))}
         <ImportControlTotals records={preview.records} />
+        {!!preview.comparison?.uncoveredCurrencies?.length && <p role="alert" className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm">
+          La carga anterior contenía {preview.comparison.uncoveredCurrencies.join(", ")}, fuera de la cobertura de esta exportación. Esos datos permanecen en el histórico. Confirmar esta carga no acredita que sus saldos sean cero.
+        </p>}
         {preview.comparisonError && !cutoffIssue && (
           <div
             role="alert"
@@ -157,7 +163,7 @@ export function ImportPreview({
         )}
         {preview.error > 0 && (
           <p role="alert" className="mb-4 text-sm text-danger">
-            Hay errores en BASE. Se conservará la carga anterior hasta que todas
+            Hay errores en {isErp ? "ERP" : "BASE"}. Se conservará la carga anterior hasta que todas
             las filas sean válidas.
           </p>
         )}
@@ -185,7 +191,7 @@ export function ImportPreview({
         </div>
         <DataTable<ProcessedRecord>
           data={data}
-          rowKey={(r) => String(r.row)}
+          rowKey={coordinate}
           pageSize={8}
           search
           searchText={(r) =>
@@ -200,8 +206,8 @@ export function ImportPreview({
           columns={[
             {
               key: "row",
-              header: "Fila BASE",
-              render: (r) => r.row,
+              header: "Hoja / fila",
+              render: (r) => `${r.sheet} · ${r.row}`,
               sortValue: (r) => r.row,
             },
             {
@@ -230,14 +236,14 @@ export function ImportPreview({
             {
               key: "change",
               header: "Resultado",
-              render: (r) => labels[byRow.get(r.row)?.change ?? "invalid"],
+              render: (r) => labels[byRow.get(coordinate(r))?.change ?? "invalid"],
             },
             {
               key: "diff",
               header: "Cambios y observaciones",
               className: "!whitespace-normal min-w-[260px] max-w-[400px]",
               render: (r) => {
-                const c = byRow.get(r.row);
+                const c = byRow.get(coordinate(r));
                 return (
                   <div className="space-y-1 text-xs">
                     {c?.change === "modified" &&
@@ -253,8 +259,8 @@ export function ImportPreview({
               key: "apply",
               header: "Aplicar",
               render: (r) =>
-                byRow.get(r.row)?.change === "modified" &&
-                byRow.get(r.row)?.manualEdited ? (
+                byRow.get(coordinate(r))?.change === "modified" &&
+                byRow.get(coordinate(r))?.manualEdited ? (
                   <input
                     type="checkbox"
                     aria-label={"Aplicar cambio fila " + r.row}
@@ -269,9 +275,9 @@ export function ImportPreview({
                       setReviewed(false);
                     }}
                   />
-                ) : byRow.get(r.row)?.change === "new" ? (
+                ) : byRow.get(coordinate(r))?.change === "new" ? (
                   "Se añadirá"
-                ) : byRow.get(r.row)?.change === "modified" ? (
+                ) : byRow.get(coordinate(r))?.change === "modified" ? (
                   "Actualización diaria"
                 ) : (
                   "—"
@@ -284,12 +290,13 @@ export function ImportPreview({
             className="mt-1"
             type="checkbox"
             checked={reviewed}
+            disabled={busy || (isErp ? contextDirty : cutoffDirty) || !!cutoffIssue}
             onChange={(e) => setReviewed(e.target.checked)}
           />
           <span>
             Revisé la comparación, la fecha de corte {reading?.cutoff} y sus advertencias. Se añadirán {newCount}{" "}
             filas y se actualizarán {automatic + selected.length}. Se guardará
-            la BASE completa de esta fecha.
+            la fotografía completa de la cobertura declarada.
           </span>
         </label>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
@@ -308,7 +315,7 @@ export function ImportPreview({
             <button
               disabled={
                 busy ||
-                cutoffDirty ||
+                (isErp ? contextDirty : cutoffDirty) ||
                 !!cutoffIssue ||
                 !reviewed ||
                 !preview.comparison ||

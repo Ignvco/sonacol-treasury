@@ -56,8 +56,9 @@ export const baseTreasuryService = {
         batch: snapshot.batch ?? null,
         latestId: snapshot.latestId ?? null,
         cutoff: snapshot.batch?.cutoff ?? new Date().toISOString().slice(0, 10),
-        warning:
-          snapshot.batch?.status === "partial"
+        warning: snapshot.coverage
+          ? [`Cobertura ERP: ${snapshot.coverage.currency}. Las monedas y cuentas no incluidas no se consideran saldos cero.`, ...(snapshot.businessIssues ?? [])].join(" · ")
+          : snapshot.batch?.status === "partial"
             ? "Esta carga antigua quedó incompleta. Reimporta el Excel para guardar una BASE completa."
             : "",
       };
@@ -90,7 +91,7 @@ export const baseTreasuryService = {
       .eq("id", id)
       .single();
     if (error) throw explain(error);
-    return { ...data, source_sheet: "BASE" } as {
+    return { ...data, source_sheet: (data.normalized_json as Record<string, unknown>)?.sourceSheet ?? "BASE" } as {
       raw_json: Record<string, unknown>;
       normalized_json: Record<string, unknown>;
       source_row: number;

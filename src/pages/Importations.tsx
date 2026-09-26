@@ -176,7 +176,7 @@ export default function Importations() {
     <div className="t-fade-in flex min-w-0 flex-col gap-6">
       <PageHeader
         title="Importaciones"
-        subtitle="Carga diaria de BASE · ERP de solo lectura y MANUAL editable"
+        subtitle="Datos ERP, decisiones manuales y seguimiento de importaciones"
         actions={
           canWrite && (
             <a className="t-button-secondary" href="#excel-file-management">
@@ -249,7 +249,7 @@ export default function Importations() {
               Arrastra tu Excel hasta aquí
             </h2>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Leeremos únicamente BASE, con sus montos y fechas.
+              Reconocemos ERP.xlsm y el formato CAJA anterior.
               <br className="hidden sm:block" /> Podrás comprobar todo antes de
               guardar.
             </p>
@@ -286,12 +286,12 @@ export default function Importations() {
             <div className="space-y-5">
               {[
                 [
-                  "Solo BASE",
-                  "Clasifica los registros consolidados de BASE por su origen.",
+                  "ERP o CAJA",
+                  "Lee datos crudos ERP o la BASE del libro CAJA durante la transición.",
                 ],
                 [
                   "Revisa antes de guardar",
-                  "Comprueba los valores de BASE y las observaciones antes de confirmar.",
+                  "Comprueba la cobertura, los importes y las observaciones antes de confirmar.",
                 ],
                 [
                   "Conserva la trazabilidad",

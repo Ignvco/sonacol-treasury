@@ -75,7 +75,7 @@ const toImportBatch = (r: any): ImportBatch => ({
 const toImportRecord = (r: any): ImportRecord => ({
   id: r.id,
   importBatchId: r.batch_id,
-  sourceSheet: "BASE",
+  sourceSheet: r.source_sheet ?? r.normalized_json?.sourceSheet ?? "BASE",
   sourceRow: r.source_row,
   status: r.status as ImportRecordStatus,
   entityType: r.entity_type,
@@ -169,11 +169,12 @@ export async function analyzeFile(
   const cutoffIssue = importCutoffIssue(parsed);
   if (cutoffIssue) return { ...parsed, comparisonError: cutoffIssue };
   onProgress?.({
-    phase: "Comparando BASE con los registros guardados…",
+    phase: "Comparando los datos importados con los registros guardados…",
     done: 0,
     total: 0,
   });
-  let request = db.rpc("compare_daily_base", {
+  const isErp = parsed.sheets.some(s => s.profile === "ERP-RAW-v1");
+  let request = db.rpc(isErp ? "compare_erp_import" : "compare_daily_base", {
     p_records: parsed.records.map(({ raw, ...record }) => record) as unknown as Json,
   });
   if (signal) request = request.abortSignal(signal);
@@ -217,13 +218,15 @@ export const importService = {
       done: 0,
       total: 0,
     });
-    const { data, error } = await db.rpc("import_daily_base", {
+    const args = {
       p_file_name: preview.fileName,
       p_file_hash: preview.fileHash,
       p_records: preview.records as unknown as Json,
       p_revision: preview.comparison.revision,
-      p_apply_rows: applyRows,
-    });
+    };
+    const { data, error } = preview.sheets.some(s => s.profile === "ERP-RAW-v1")
+      ? await db.rpc("import_erp_daily", args)
+      : await db.rpc("import_daily_base", { ...args, p_apply_rows: applyRows });
     // Never retry through another write path: an interrupted response may already have committed.
     if (error) throw new Error(message(error));
     const batch = data as unknown as ImportBatch | null;
@@ -233,7 +236,7 @@ export const importService = {
       );
     onProgress?.({ phase: "Importación verificada", done: 1, total: 1 });
     workingDate.select(batch.id);
-    return batch;
+    return toImportBatch(data);
   },
   async runFileImport(
     file: File,

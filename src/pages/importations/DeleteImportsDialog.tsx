@@ -163,7 +163,7 @@ export function DeleteImportsDialog({
                       {Object.entries(plan.dependentWork)
                         .map(
                           ([k, n]) =>
-                            `${({ scenarios: "escenarios", forecasts: "previsiones", tasks: "tareas", comments: "comentarios", attachments: "adjuntos", matches: "conciliaciones" } as Record<string, string>)[k] ?? k}: ${n}`,
+                            `${({ scenarios: "escenarios", forecasts: "previsiones", tasks: "tareas", comments: "comentarios", attachments: "adjuntos", matches: "conciliaciones", businessDecisions: "decisiones de negocio" } as Record<string, string>)[k] ?? k}: ${n}`,
                         )
                         .join(" · ")}
                       . Las cartolas independientes se conservan.

@@ -53,6 +53,7 @@ const GROUPS = [
     label: "DECISIONES",
     items: [
       { to: "/changes", label: "Explicar cambios", icon: GitCompareArrows },
+      { to: "/planning", label: "Planificación y reglas", icon: CalendarRange },
       { to: "/scenarios", label: "Laboratorio de caja", icon: FlaskConical },
       { to: "/accuracy", label: "Precisión", icon: Target },
       { to: "/assistant", label: "Asistente", icon: Sparkles },
