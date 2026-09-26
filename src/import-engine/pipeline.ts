@@ -109,7 +109,7 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
           const issues: string[] = [];
           if (record.normalized.currency !== reading.localCurrency) issues.push("La moneda de la fila no coincide con la moneda local declarada.");
           if (String(record.normalized.recordRole).endsWith("_movement") && date && reading.periodStart && String(date) < reading.periodStart)
-            issues.push("Movimiento anterior al inicio del período declarado.");
+            issues.push(`Movimiento del ${date} anterior al inicio ${reading.periodStart}; corrige el inicio del mayor de ${sheet.name}.`);
           if (issues.length) { record.status = "ERROR"; record.warnings = [record.warnings, ...issues].filter(Boolean).join(" · "); }
         }
         if(record.status!=="ERROR") {

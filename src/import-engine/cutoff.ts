@@ -9,6 +9,7 @@ export function resolveBaseCutoff(reading: BaseReadingSummary, choice?: SheetOve
     const company = choice?.company?.trim() || "SONACOL", localCurrency = choice?.localCurrency ?? "CLP";
     const cutoffIssue = !cutoff || !validDate(cutoff) ? "Define la fecha de corte de los datos ERP."
       : !periodStart || !validDate(periodStart) || periodStart > cutoff ? `Define el inicio del período de ${reading.sheetName ?? "ERP"}.`
+      : reading.firstMovementDate && periodStart > reading.firstMovementDate ? `${reading.sheetName} contiene un movimiento del ${reading.firstMovementDate}; el inicio de su mayor no puede ser posterior a esa fecha.`
       : reading.lastBankDate && cutoff < reading.lastBankDate ? `ERP contiene datos hasta ${reading.lastBankDate}; el corte no puede ser anterior.`
       : !["CLP", "USD", "UF", "UTM"].includes(localCurrency) ? "Moneda local inválida."
       : company.length > 100 ? "La empresa admite hasta 100 caracteres." : null;

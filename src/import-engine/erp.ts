@@ -101,7 +101,14 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
           signed = number("net");
           const debit = number("debit", true), credit = number("credit", true);
           if (Math.abs(signed - debit + credit) > 0.005) errors.push("C/D no coincide con Cargo menos Abono.");
-          if (!balances.has(balanceKey)) errors.push("Falta saldo OB anterior para la cuenta del fondo.");
+          if (!balances.has(balanceKey) && errors.length === 0) {
+            const inferred = (Math.round(balance * 100) - Math.round(signed * 100)) / 100;
+            if (!Number.isSafeInteger(Math.round(inferred * 100))) errors.push("Apertura calculada fuera del rango monetario seguro.");
+            else {
+              n.inferredOpeningBalance = inferred;
+              warnings.push("Sin fila OB: apertura calculada como saldo acumulado menos primer movimiento. Revisa el control de importes.");
+            }
+          }
           else if (Math.abs(balances.get(balanceKey)! + signed - balance) > 0.005) errors.push("Saldo acumulado inconsistente con el movimiento.");
           Object.assign(n, { date: date("date"), transaction: required("transaction"), debe: debit, haber: credit });
         }
@@ -124,7 +131,8 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       if (++count > MAX_IMPORT_ROWS) throw new Error("ERP supera 20.000 registros financieros.");
     }
     skipped = Math.max(0, (ordered[ordered.length - 1] ?? header) - header - records.length);
-    sheets.push({ name, rows: [], prepared: records, profile: ERP_PROFILE, headerIndex: header, reading: { profileId: ERP_PROFILE, sheetName: name, headerRow: header, firstDataRow: records[0]?.row ?? null, lastDataRow: records[records.length - 1]?.row ?? null, ignoredRows: skipped, missingOptional: [], currencyColumn: "Importes ML", cutoffSource: "user", cutoff: null, workbookCutoff: null, cutoffFormula: null, lastBankDate: null, cutoffIssue: "Define corte e inicio del período ERP para importar." }, note: "Datos crudos ERP. Los ajustes, reglas y proyecciones se mantienen en la plataforma." });
+    const firstMovementDate = records.filter(r => String(r.normalized.recordRole).endsWith("_movement")).map(r => String(r.normalized.date ?? "")).filter(Boolean).sort()[0] ?? null;
+    sheets.push({ name, rows: [], prepared: records, profile: ERP_PROFILE, headerIndex: header, reading: { profileId: ERP_PROFILE, sheetName: name, firstMovementDate, headerRow: header, firstDataRow: records[0]?.row ?? null, lastDataRow: records[records.length - 1]?.row ?? null, ignoredRows: skipped, missingOptional: [], currencyColumn: "Importes ML", cutoffSource: "user", cutoff: null, workbookCutoff: null, cutoffFormula: null, lastBankDate: null, cutoffIssue: "Define corte e inicio del período ERP para importar." }, note: "Datos crudos ERP. Los ajustes, reglas y proyecciones se mantienen en la plataforma." });
   }
   const lastDate = sheets.flatMap(s => s.prepared ?? []).map(r => String(r.normalized.date ?? r.normalized.issueDate ?? "")).filter(Boolean).sort().slice(-1)[0] ?? null;
   for (const sheet of sheets) sheet.reading!.lastBankDate = lastDate;

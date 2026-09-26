@@ -76,7 +76,7 @@ test("an invalid AE7 can be corrected on screen, but an erroneous planned date c
     wb.Sheets.BASE.N10 = { t: "e", v: 42 };
     await open();
     await expect(page.getByText("Hay errores en BASE.", { exact: false })).toBeVisible();
-    await expect(page.getByText("BASE!N10 contiene un error de Excel.", { exact: false })).toBeVisible();
+    await expect(page.getByText("BASE!N10 contiene un error de Excel.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Aplicar .* cambios|Confirmar revisión/ })).toBeDisabled();
     expect((await db.query("select * from daily_base_batches")).rows.length).toBe(1);
   } finally { await db.close(); }

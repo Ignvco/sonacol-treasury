@@ -176,7 +176,7 @@ La búsqueda global (botón de lupa o Ctrl/⌘ K) recorre documentos, clientes, 
 4. Confirma el conjunto completo. Una inconsistencia de estructura, fecha, importe o saldo acumulado impide reemplazar los datos aceptados.
 5. Abre **Planificación y reglas** para gestionar cobros, clasificaciones y rescates. Los movimientos adicionales siguen en **Proyecciones**.
 
-El perfil actual corresponde a exportaciones en **una moneda local declarada**, con cabeceras Activos por cuenta bancaria y apertura OB por cuenta de inversión. No suma CLP y USD como si fueran una moneda; importes ME requieren un contrato adicional. Las cuentas o monedas ausentes quedan fuera de la fotografía, sin acreditar saldo cero. El aviso de cobertura acompaña las vistas financieras.
+El perfil actual corresponde a exportaciones en **una moneda local declarada**, con cabeceras Activos por cuenta bancaria. Para inversiones admite una apertura OB explícita o una apertura calculada a partir del saldo acumulado y el primer movimiento de cada cuenta. El cálculo se muestra separado de las filas originales y se valida también en SQL. No suma CLP y USD como si fueran una moneda; importes ME requieren un contrato adicional. Las cuentas o monedas ausentes quedan fuera de la fotografía, sin acreditar saldo cero. El aviso de cobertura acompaña las vistas financieras.
 
 ### CAJA / BASE: operación heredada
 
@@ -312,7 +312,7 @@ La especificación visual original describía un MVP con datos ficticios. La ope
 
 ### Fórmulas y presentación
 
-**En ERP, caja disponible = apertura bancaria + cargos − abonos hasta el corte, por moneda y cuenta.** Las aperturas participan en el saldo, pero no en los ingresos y egresos brutos del período. La inversión se obtiene del saldo OB y sus movimientos firmados. Una posición de inversión **no es un vencimiento**: no se inventan fecha de rescate, tasa ni interés.
+**En ERP, caja disponible = apertura bancaria + cargos − abonos hasta el corte, por moneda y cuenta.** Las aperturas participan en el saldo, pero no en los ingresos y egresos brutos del período. La inversión se obtiene de la apertura y sus movimientos firmados. Si falta OB, apertura = primer saldo acumulado − primer movimiento con signo; esa apertura se suma una vez a los movimientos. Se conserva la coordenada real de referencia y se valida la continuidad de todos los saldos acumulados. No se crea una fila ficticia en el Excel. Una posición de inversión **no es un vencimiento**: no se inventan fecha de rescate, tasa ni interés.
 
 Los rescates programados reservan capital sin disminuir el saldo contable importado. Solo el monto programado participa en el flujo futuro. Ejecutar o cancelar un plan lo retira del flujo y libera su reserva; el movimiento real debe llegar por ERP. No hay conciliación automática de una ejecución. Si un nuevo ERP reduce el capital por debajo de lo reservado, los rescates quedan bloqueados como borradores y se muestra un aviso hasta revisarlos.
 
@@ -399,6 +399,7 @@ Las importaciones y las modificaciones MANUAL usan transacciones y control de re
 | Cuatro migraciones `20260919...` | Admisión, decisiones, conciliación y operaciones; orden exacto en sección 18 |
 | `20260926000000000_erp_raw_import.sql` | Coordenadas por hoja, contrato crudo, importación idempotente y conservación de MANUAL |
 | `20260926010000000_business_planning.sql` | Decisiones versionadas, reglas, posiciones, rescates y composición de consultas |
+| `20260926020000000_erp_investment_opening.sql` | Apertura de inversión calculada cuando falta OB; validación de acumulados por cuenta y trazabilidad |
 
 **La limpieza de archivos de documentación no requiere ejecutar SQL.** La opción Eliminar Excel sí requiere la migración del 18 de septiembre si todavía no está aplicada. No repitas migraciones ya instaladas. Algunas crean objetos una sola vez y los archivos `cleanup_*` contienen borrados: conservarlos no significa volver a ejecutarlos sobre datos reales.
 
@@ -651,7 +652,7 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 | --- | --- |
 | Implementado | ERP crudo de tres hojas y CAJA/BASE, historial, originales de solo lectura, MANUAL y decisiones versionadas |
 | Implementado | Fechas previstas de cobro, clasificación, posiciones de inversión y reservas para rescates parciales |
-| Pendiente de aceptación | Aplicar las dos migraciones del 26/09 en el entorno destino y revisar decisiones iniciales contra CAJA |
+| Pendiente de aceptación | Aplicar las migraciones pendientes del 26/09 en el entorno destino y revisar decisiones iniciales contra CAJA |
 | Migración progresiva | Reglas adicionales y cálculos auxiliares de CAJA que no estén representados por esta primera etapa |
 | Implementado | Plantilla de lectura SONACOL BASE v1 visible en Configuración y vista previa; validación de estructura con filas variables |
 | Implementado | Hoy, tareas, diferencias, escenarios aislados, previsiones congeladas y precisión observada |
@@ -664,7 +665,7 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 | Preparado para TI | Scripts de respaldo y restauración; falta configurar y comprobar infraestructura |
 | No incluido | Archivo binario original del Excel en Storage, modo offline completo, multiempresa, traducción completa, pagos bancarios ejecutables o aprendizaje automático predictivo |
 
-La etapa actual está preparada en `feat/erp-business-layers`, sobre el repositorio `Ignvco/sonacol-treasury`. A diferencia de la entrega de perfil BASE del 23/09, **sí requiere dos migraciones nuevas**. La sección 25 detalla su activación. GitHub Actions permanece exclusivamente manual: no se ejecutan jobs como parte de esta entrega.
+La primera etapa está preparada en `feat/erp-business-layers`, sobre el repositorio `Ignvco/sonacol-treasury`, con la corrección posterior `fix/erp-investment-opening`. A diferencia del perfil BASE del 23/09, **requiere migraciones SQL**: las dos iniciales de ERP y la corrección adicional de aperturas. La sección 25 detalla su activación. GitHub Actions permanece exclusivamente manual: no se ejecutan jobs como parte de esta entrega.
 
 Si vienes de `fix/base-diaria`, instala primero las dependencias de la plataforma de decisiones descritas en la sección siguiente. Las secciones históricas conservan el contexto de las entregas anteriores.
 
@@ -866,8 +867,8 @@ Esta entrega implementa la primera etapa funcional; no acredita que se haya publ
 ```bash
 git status
 git fetch origin
-git switch feat/erp-business-layers
-git pull --ff-only origin feat/erp-business-layers
+git switch fix/erp-investment-opening
+git pull --ff-only origin fix/erp-investment-opening
 npx --yes pnpm@11.19.0 install --frozen-lockfile
 npx --yes pnpm@11.19.0 check
 npx --yes pnpm@11.19.0 build
@@ -878,6 +879,7 @@ npx --yes pnpm@11.19.0 build
 ```text
 supabase/migrations/20260926000000000_erp_raw_import.sql
 supabase/migrations/20260926010000000_business_planning.sql
+supabase/migrations/20260926020000000_erp_investment_opening.sql
 ```
 
 3. Verifica la migración CAJA → ERP: selecciona fechas de corte comparables, revisa cobertura, confirma que MANUAL se mantiene y resuelve los ajustes y rescates pendientes en Planificación. No certifica equivalencia comparar saldos de cortes distintos. La correspondencia por nombres de clientes diferentes requiere revisión explícita.
@@ -885,3 +887,33 @@ supabase/migrations/20260926010000000_business_planning.sql
 5. Tras aceptar esa copia, aplica las migraciones pendientes al entorno destino con su procedimiento de respaldo y publica el frontend compatible con el alojamiento habitual.
 
 Los mayores ERP solo acreditan las cuentas y monedas presentes en la exportación. El perfil no identifica automáticamente el instrumento individual dentro de una misma cuenta contable, ni concilia un rescate planeado con una transacción real. Estas correspondencias deben confirmarse antes de ampliar la automatización. Los libros reales y sus datos financieros no forman parte del repositorio; las pruebas versionadas usan ejemplos anónimos.
+
+
+### Corrección de carga ERP sin fila OB
+
+Si ya instalaste las dos migraciones de la primera etapa, **no las repitas**. Actualiza el frontend con la rama `fix/erp-investment-opening` y aplica únicamente:
+
+```text
+supabase/migrations/20260926020000000_erp_investment_opening.sql
+```
+
+Esta migración reemplaza la validación y la composición de posiciones; no borra ni reescribe las filas ERP, MANUAL o decisiones existentes. Mantiene los permisos anteriores. Debe aplicarse antes de usar el frontend actualizado.
+
+El caso reportado combinaba dos condiciones: la fila OB estaba ausente y el primer movimiento de inversiones era anterior al inicio declarado. Cambiar solamente la fecha no resuelve la ausencia de OB en la versión anterior. La corrección calcula la apertura como saldo acumulado menos primer movimiento, comprueba cada saldo posterior y muestra el cálculo en la vista previa y en Planificación. Las filas originales y sus importes permanecen intactos.
+
+Para el archivo reportado, el primer movimiento de COLOCACIONES es del **31/08/2026**: el inicio del mayor de inversiones debe incluir ese día. El inicio de bancos es independiente. Confirma la fecha de corte según la extracción real; la fecha de la última transacción no certifica el corte.
+
+El filtro **Con errores** ahora funciona incluso antes de obtener una comparación SQL y cada error muestra hoja, fila y motivo. No se marcan como inválidas todas las filas por una comparación todavía pendiente.
+
+La verificación local de esta corrección incluye **186 pruebas de lógica/SQL y cuatro pruebas de navegador aprobadas**, TypeScript y build correctos, y la carga del ERP adjunto en PostgreSQL aislado: 289 filas originales, cero errores con el período de inversiones corregido y apertura calculada visible. El capital de inversión no se convierte en flujo futuro por este cálculo. No se modificó el XLSM ni la base productiva.
+
+### Segunda etapa: operación y equivalencia con CAJA
+
+La siguiente etapa migra y valida las decisiones financieras pendientes sobre esta base técnica:
+
+1. **Correspondencias:** resolver los ajustes de cobranza y rescates pendientes, confirmar clientes/documentos, posiciones y cuentas receptoras, y conservar esas asociaciones para próximas cargas.
+2. **Reglas de negocio:** parametrizar las condiciones identificadas en CAJA que aún no están representadas. Validar cuáles son reglas generales y cuáles son excepciones del usuario; mantener vencimientos originales, fechas previstas y decisiones separadas.
+3. **Proyección diaria:** reproducir las salidas de caja y proyecciones diarias de referencia usando ERP, MANUAL, reglas y rescates programados. Comparar al mismo corte, moneda y horizonte; explicar diferencias por fila y categoría.
+4. **Rutina diaria:** probar exportaciones sucesivas, documentos modificados o ausentes, rescates ejecutados, ajustes conservados e históricos. Dejar de mantener CAJA cuando los controles de aceptación estén cumplidos y las diferencias estén resueltas.
+
+Esta corrección de importación forma parte de estabilizar la primera etapa. No equivale a haber completado las correspondencias y reglas de la segunda.
