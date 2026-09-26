@@ -1,6 +1,6 @@
 # SONACOL Treasury — manual del proyecto
 
-Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **26 de septiembre de 2026** para **ERP crudo v1 + planificación de negocio v1**, manteniendo la compatibilidad con **SONACOL BASE v1**. Repositorio: [Ignvco/sonacol-treasury](https://github.com/Ignvco/sonacol-treasury). Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
+Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **26 de septiembre de 2026** para **ERP crudo v1 + segunda etapa de migración CAJA**, manteniendo la compatibilidad con **SONACOL BASE v1**. Repositorio: [Ignvco/sonacol-treasury](https://github.com/Ignvco/sonacol-treasury). Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
 
 ## Índice
 
@@ -29,6 +29,7 @@ Documento único de funcionamiento, arquitectura, instalación, base de datos, o
 23. [Respaldos y prueba de restauración](#23-respaldos-y-prueba-de-restauración)
 24. [Nuevos objetos y referencias técnicas](#24-nuevos-objetos-y-referencias-técnicas)
 25. [Activar ERP y planificación](#25-activar-erp-y-planificación)
+26. [Segunda etapa: decisiones CAJA](#26-segunda-etapa-decisiones-caja)
 
 ## 1. Objetivo y reglas del negocio
 
@@ -145,7 +146,7 @@ El cliente incluye la conexión pública original como alternativa cuando las va
 | `/` | Hoy: caja, riesgo, antigüedad del ERP, cambio de caja y tareas con responsable |
 | `/dashboard` | Resumen de caja y saldo previsto de la misma serie diaria que Flujo de caja |
 | `/changes` | Comparación de dos BASE: altas, bajas, cambios y explicación de caja |
-| `/planning` | Fechas de cobro, clasificaciones, reglas y rescates parciales sobre ERP crudo |
+| `/planning` | Correspondencias CAJA, fechas de cobro, reglas, rescates parciales y comparación diaria con referencia CAJA |
 | `/scenarios` | Laboratorio de fechas, importes y exclusiones; escenarios guardados |
 | `/accuracy` | Previsiones congeladas frente a saldos BANCO observados posteriormente |
 | `/assistant` | Consultas verificables sobre caja, riesgo, cobros, egresos y cambios |
@@ -243,7 +244,7 @@ En una importación ERP del mismo corte o posterior, **todos** los movimientos M
 
 En la primera transición CAJA → ERP solo se trasladan fechas de factura de manera automática si folio, cliente, monto, moneda, emisión y vencimiento permiten una correspondencia inequívoca. Los casos inciertos quedan como ajustes pendientes de reasignación. Los tramos de inversión de CAJA se conservan como rescates pendientes de asignar a una posición y una cuenta receptora; no se convierten automáticamente en ingresos. Los vínculos MANUAL existentes requieren revisar su destino si dejó de estar presente.
 
-Esta primera etapa no aplica decisiones ERP a una nueva importación del formato CAJA. Si se vuelve a ese formato, las decisiones ERP siguen consultables en su lote histórico; continuar la operación migrada requiere mantener ERP como entrada y revisar las correspondencias al volver a cambiar de perfil.
+Las etapas ERP no aplican decisiones de negocio a una nueva importación del formato CAJA. Si se vuelve a ese formato, las decisiones ERP siguen consultables en su lote histórico; continuar la operación migrada requiere mantener ERP como entrada y revisar las correspondencias al volver a cambiar de perfil.
 
 Las reglas siguientes describen el comportamiento heredado de CAJA/BASE:
 
@@ -400,6 +401,7 @@ Las importaciones y las modificaciones MANUAL usan transacciones y control de re
 | `20260926000000000_erp_raw_import.sql` | Coordenadas por hoja, contrato crudo, importación idempotente y conservación de MANUAL |
 | `20260926010000000_business_planning.sql` | Decisiones versionadas, reglas, posiciones, rescates y composición de consultas |
 | `20260926020000000_erp_investment_opening.sql` | Apertura de inversión calculada cuando falta OB; validación de acumulados por cuenta y trazabilidad |
+| `20260926030000000_caja_business_migration.sql` | Evidencia CAJA conservada, correspondencias con vínculos MANUAL y adopción revisada de reglas de cobranza |
 
 **La limpieza de archivos de documentación no requiere ejecutar SQL.** La opción Eliminar Excel sí requiere la migración del 18 de septiembre si todavía no está aplicada. No repitas migraciones ya instaladas. Algunas crean objetos una sola vez y los archivos `cleanup_*` contienen borrados: conservarlos no significa volver a ejecutarlos sobre datos reales.
 
@@ -610,6 +612,8 @@ Para informar un error, incluye mensaje completo, ruta de pantalla, versión des
 | `src/workers/xlsx.worker.ts` | Análisis y SHA-256 fuera del hilo principal |
 | `src/services/importService.ts` | Ciclo del worker, comparación, confirmación y errores |
 | `src/services/baseTreasuryService.ts` | Lectura de lotes, trazas y vínculos |
+| `src/pages/planning/`, `src/services/planningService.ts` | Decisiones operativas, evidencia de origen y adopción revisada de políticas |
+| `src/financial-engine/migration-comparison.ts` | Comparación diaria al mismo corte y moneda, cobertura y diferencias por movimiento |
 | `src/services/workingDate.ts` | Selección de lote por usuario en el navegador |
 | `src/services/dataService.ts` | Acceso a datos de los módulos |
 | `src/services/erp/erp-connector.ts` | Interfaz conceptual de capacidades ERP pendientes |
@@ -653,7 +657,8 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 | Implementado | ERP crudo de tres hojas y CAJA/BASE, historial, originales de solo lectura, MANUAL y decisiones versionadas |
 | Implementado | Fechas previstas de cobro, clasificación, posiciones de inversión y reservas para rescates parciales |
 | Pendiente de aceptación | Aplicar las migraciones pendientes del 26/09 en el entorno destino y revisar decisiones iniciales contra CAJA |
-| Migración progresiva | Reglas adicionales y cálculos auxiliares de CAJA que no estén representados por esta primera etapa |
+| Implementado, segunda etapa | Origen CAJA conservado, revisión de correspondencias, adopción de cobranza con excepciones y comparación diaria |
+| Migración progresiva | Resolver los casos concretos pendientes; validar otras reglas de CAJA antes de automatizarlas |
 | Implementado | Plantilla de lectura SONACOL BASE v1 visible en Configuración y vista previa; validación de estructura con filas variables |
 | Implementado | Hoy, tareas, diferencias, escenarios aislados, previsiones congeladas y precisión observada |
 | Implementado | Agenda semanal/mensual, recurrencias, excepciones, comentarios y adjuntos |
@@ -907,13 +912,69 @@ El filtro **Con errores** ahora funciona incluso antes de obtener una comparaci�
 
 La verificación local de esta corrección incluye **186 pruebas de lógica/SQL y cuatro pruebas de navegador aprobadas**, TypeScript y build correctos, y la carga del ERP adjunto en PostgreSQL aislado: 289 filas originales, cero errores con el período de inversiones corregido y apertura calculada visible. El capital de inversión no se convierte en flujo futuro por este cálculo. No se modificó el XLSM ni la base productiva.
 
-### Segunda etapa: operación y equivalencia con CAJA
+## 26. Segunda etapa: decisiones CAJA
 
-La siguiente etapa migra y valida las decisiones financieras pendientes sobre esta base técnica:
+Rama **`feat/caja-business-migration`**, basada en `fix/erp-investment-opening`. Implementa el trabajo operativo sobre la primera etapa; las decisiones financieras ambiguas requieren revisión en la plataforma. El código está preparado para instalarse: no se aplicó SQL ni se publicó el frontend en producción durante esta entrega. GitHub Actions sigue siendo exclusivamente manual.
 
-1. **Correspondencias:** resolver los ajustes de cobranza y rescates pendientes, confirmar clientes/documentos, posiciones y cuentas receptoras, y conservar esas asociaciones para próximas cargas.
-2. **Reglas de negocio:** parametrizar las condiciones identificadas en CAJA que aún no están representadas. Validar cuáles son reglas generales y cuáles son excepciones del usuario; mantener vencimientos originales, fechas previstas y decisiones separadas.
-3. **Proyección diaria:** reproducir las salidas de caja y proyecciones diarias de referencia usando ERP, MANUAL, reglas y rescates programados. Comparar al mismo corte, moneda y horizonte; explicar diferencias por fila y categoría.
-4. **Rutina diaria:** probar exportaciones sucesivas, documentos modificados o ausentes, rescates ejecutados, ajustes conservados e históricos. Dejar de mantener CAJA cuando los controles de aceptación estén cumplidos y las diferencias estén resueltas.
+### Instalar sobre la primera etapa
 
-Esta corrección de importación forma parte de estabilizar la primera etapa. No equivale a haber completado las correspondencias y reglas de la segunda.
+Con los cambios locales conservados y desde la carpeta del proyecto:
+
+```bash
+git fetch origin
+git switch feat/caja-business-migration
+git pull --ff-only origin feat/caja-business-migration
+```
+
+La migración nueva depende de las tres migraciones ERP de la sección 25. **No repitas las que ya aplicaste.** Si ya está instalada la corrección de aperturas, aplica solamente este archivo en el SQL Editor del proyecto Supabase correcto:
+
+```bash
+pbcopy < supabase/migrations/20260926030000000_caja_business_migration.sql
+```
+
+Si falta `20260926020000000_erp_investment_opening.sql`, aplícala antes. Conserva tu respaldo y utiliza el historial CLI existente si administras las migraciones con Supabase CLI. La actualización agrega evidencia y funciones; no borra ni reimporta datos. Los ajustes y sus valores existentes permanecen intactos hasta que el usuario adopte una regla o los edite.
+
+Después actualiza el frontend con tu proceso habitual:
+
+```bash
+npx --yes pnpm@11.19.0 install --frozen-lockfile
+npx --yes pnpm@11.19.0 check
+npx --yes pnpm@11.19.0 build
+```
+
+### Revisar correspondencias
+
+En **Planificación y reglas → Correspondencias pendientes**, abre una decisión. La pantalla muestra cliente, documento, importe, vencimiento, fechas CAJA, banco, cuenta y coordenada de origen junto al destino ERP. Selecciona el destino y confirma que revisaste la correspondencia. Una coincidencia de monto no acredita identidad; un folio distinto permanece visible como advertencia.
+
+La asociación se guarda por identidad ERP y se conserva en las siguientes cargas del mismo corte o posteriores. Al reasignar una factura, sus vínculos MANUAL se trasladan en la misma transacción. Un destino ocupado se rechaza; los enlaces con importes incompatibles siguen fuera de la proyección hasta corregirse. Los rescates requieren posición, monto, moneda, fecha y cuenta receptora, y mantienen el control de capital reservado. No se deduce pago o ejecución por ausencia del registro.
+
+`source_json` conserva la evidencia normalizada original y la referencia de archivo/fila. Al actualizar una instalación de etapa 1 se recupera desde el lote CAJA, si aún existe. Después, esa evidencia sobrevive a la eliminación del lote fuente y al arrastre diario. Si el origen se eliminó antes de instalar esta migración, la pantalla indica que falta la evidencia: no se reconstruye inventándola.
+
+### Adoptar cobranza CAJA
+
+**Adoptar cobranza CAJA** permite seleccionar un cliente por su código ERP, días naturales desde el vencimiento, prioridad y cuenta receptora. El punto de partida observado en CAJA es **+5 días naturales**; no se introducen ajustes de fines de semana o feriados. Los bancos observados en las correspondencias se muestran como referencia; la cuenta se selecciona explícitamente por su código bancario.
+
+1. Pulsa **Revisar impacto** para ver facturas alcanzadas, fechas calculadas que seguirán la regla y fechas explícitas que se preservarán.
+2. Pulsa **Aplicar regla revisada**. Si cambió la planificación durante la revisión, debes generar una vista previa nueva.
+3. Revisa el resultado en Cobranzas. La regla se conserva para las nuevas facturas del cliente en las siguientes cargas.
+
+Solo se libera la fecha de un ajuste inicial **sin ediciones**, con correspondencia vigente, sin AJ VCTO manual y cuyo VCTO/fecha calculada coincide exactamente con vencimiento +5. Se preservan fechas manuales, excepciones, decisiones ya editadas y casos sin correspondencia. Para hacer que una decisión revisada siga una regla, edita su fecha prevista y déjala vacía. La evidencia CAJA se conserva.
+
+La prioridad mayor se aplica al final; los ajustes explícitos siguen prevaleciendo. La adopción rechaza otra regla de cobranza de igual o mayor prioridad que afecte ese alcance: puedes editar la existente o elegir una prioridad mayor. Las reglas de clasificación por descripción siguen disponibles en **Crear regla**; no se instalan automáticamente catálogos o condiciones que aún requieren validación.
+
+### Comparar la proyección diaria
+
+En **Comparación diaria con CAJA**, selecciona una carga CAJA trabajada y un horizonte de 30, 60 o 90 días. Ambos lados usan el motor financiero existente, la misma moneda original y el mismo corte. La pantalla no cambia el corte de una exportación para forzar una comparación.
+
+- Cortes distintos, una carga parcial o saldos bancarios ausentes en la moneda elegida impiden la comparación.
+- Cuentas bancarias diferentes, decisiones pendientes y vínculos inválidos se señalan como revisiones pendientes.
+- La tabla muestra saldo CAJA, saldo plataforma y diferencias de saldo, cobros, rescates y MANUAL. Las diferencias se expresan como **plataforma menos CAJA**.
+- El detalle explica movimientos solo presentes en un lado y cambios de fecha, importe o banco. Las correspondencias guardadas permiten comparar entidades con identificadores distintos.
+
+Una coincidencia numérica al corte y moneda elegidos no certifica otras monedas, escenarios o reglas. Para retirar CAJA de la operación, deben resolverse las correspondencias pendientes y aceptarse la cobertura y las diferencias con una exportación realmente comparable.
+
+### Verificación de la entrega
+
+La suite local de lógica y PostgreSQL aislado pasa **189 pruebas**, incluida la actualización sobre una etapa 1 con datos, la inmutabilidad ERP, preservación de fechas manuales, rechazo de revisiones obsoletas, permisos, vínculos sin doble conteo, evidencias tras eliminar el origen, reimportaciones e históricos congelados. La aceptación de navegador cubre correspondencias, adopción de reglas, comparación diaria, importación ERP y corte declarado en la compilación de producción.
+
+Los libros reales se leyeron sin modificarlos. La prueba de adopción se ejecutó en una base aislada y con un corte común **simulado únicamente para ejercitar el traslado**; no certifica igualdad de cobertura entre los archivos recibidos. Con los cortes distintos declarados para la comparación real, el comparador se bloquea correctamente. TypeScript, build y control estático de secretos se verifican; ESLint conserva cinco advertencias de Fast Refresh preexistentes, sin errores.

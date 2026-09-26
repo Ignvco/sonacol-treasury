@@ -3,7 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 export const admin = "10000000-0000-0000-0000-000000000001",
   reader = "10000000-0000-0000-0000-000000000002";
-export async function decisionDb() {
+export async function decisionDb(beforeMigration?: string) {
   const db = new PGlite();
   const tests = await readFile("tests/database.test.ts", "utf8");
   const setup = tests
@@ -26,7 +26,7 @@ export async function decisionDb() {
   // Solo migraciones reales: los archivos de registro del entorno (sin .sql)
   // duplicarían sentencias y romperían la base aislada.
   for (const file of (await readdir("supabase/migrations"))
-    .filter((f) => f.endsWith(".sql") && f >= "20260917000000000")
+    .filter((f) => f.endsWith(".sql") && f >= "20260917000000000" && (!beforeMigration || f < beforeMigration))
     .sort())
     await db.exec(await readFile("supabase/migrations/" + file, "utf8"));
   await session(db);
