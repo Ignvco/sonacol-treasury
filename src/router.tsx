@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 const Assistant = lazy(() => import("./pages/Assistant"));
 const Today = lazy(() => import("./pages/Today"));
-const Changes = lazy(() => import("./pages/Changes"));
+const Changes = lazy(() => import("./pages/changes"));
 const Scenarios = lazy(() => import("./pages/Scenarios"));
 const Accuracy = lazy(() => import("./pages/Accuracy"));
 const Security = lazy(() => import("./pages/Security"));

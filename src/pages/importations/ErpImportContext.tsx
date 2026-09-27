@@ -20,6 +20,7 @@ export function ErpImportContext({ initial, busy, firstBankDate, firstInvestment
       {([["periodStart", "bancos", firstBankDate], ["investmentPeriodStart", "inversiones", firstInvestmentDate]] as const).filter(([, , date]) => date).map(([key, name, date]) => <p key={key}>Primer movimiento de {name}: <strong>{date}</strong>. El inicio no puede ser posterior. <button type="button" className="text-brand underline" disabled={busy} onClick={() => update(key, date!)}>Usar {date} para {name}</button></p>)}
     </div>
     <p className="my-3 text-xs text-muted-foreground">Las monedas y cuentas no incluidas quedan fuera de esta fotografía; no se consideran saldos cero. MANUAL, ajustes y planificación se conservan.</p>
+    {value.company?.trim().toUpperCase() === "SONACOL" && <p className="mb-3 text-xs text-muted-foreground">Al iniciar sin reglas previas, la plataforma incorpora cobranza a 5 días naturales y clasificación por descripción. Puedes configurar las condiciones por cliente, cuentas receptoras y excepciones en Planificación.</p>}
     <button className="t-button-secondary" disabled={busy || !value.company?.trim() || dates.some(d => !d || !validDate(d))} onClick={() => onApply(value)}>Aplicar cobertura y comparar</button>
   </section>;
 }

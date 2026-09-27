@@ -18,6 +18,18 @@ test("raw ERP import, collection adjustment and partial rescue work through the 
     await page.goto("/planning");
     await expect(page.getByRole("heading", { name: "Planificación y reglas" })).toBeVisible();
     await expect(page.getByText("13.000 CLP", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Operación de caja" })).toContainText("16 reglas activas");
+    await expect(page.getByRole("combobox", { name: "Carga CAJA de referencia", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("cell", { name: "2026-09-25", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Configurar cobranzas", exact: true }).click();
+    await page.getByRole("dialog").getByRole("combobox", { name: "Cliente ERP", exact: true }).selectOption("C001");
+    await page.getByLabel("Días naturales", { exact: true }).fill("7");
+    await page.getByRole("dialog").getByRole("combobox", { name: "Cuenta receptora de la regla", exact: true }).selectOption("BANK-01");
+    await page.getByRole("button", { name: "Revisar impacto", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Impacto de la regla" })).toContainText("1 facturas alcanzadas");
+    await page.getByRole("button", { name: "Aplicar regla revisada", exact: true }).click();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.getByRole("cell", { name: "2026-09-27", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Ajustar", exact: true }).click();
     await page.getByLabel("Fecha prevista", { exact: true }).fill("2026-09-28");
     await page.getByRole("button", { name: "Guardar decisión" }).click();

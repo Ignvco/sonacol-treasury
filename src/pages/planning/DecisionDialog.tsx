@@ -11,7 +11,8 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
   snapshot: RawSnapshot; kind: BusinessDecision["kind"]; initial?: BusinessDecision; targetKey?: string; onClose: () => void;
 }) {
   const [target, setTarget] = useState(initial?.target_key ?? targetKey ?? (kind === "rule" ? "*" : ""));
-  const [values, setValues] = useState<BusinessDecision["values_json"]>(initial?.values_json ?? (kind === "rule" ? { ruleType: "collection", days: 5, priority: 10 } : kind === "redemption" ? { status: "planned", currency: snapshot.coverage?.currency ?? "CLP" } : {}));
+  const nextPriority = Math.min(9999, Math.max(9, ...(snapshot.business ?? []).filter(d => d.kind === "rule").map(d => Number(d.values_json.priority))) + 1);
+  const [values, setValues] = useState<BusinessDecision["values_json"]>(initial?.values_json ?? (kind === "rule" ? { ruleType: "collection", days: 5, priority: nextPriority } : kind === "redemption" ? { status: "planned", currency: snapshot.coverage?.currency ?? "CLP" } : {}));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [reviewedTarget, setReviewedTarget] = useState("");
   const update = (field: string, value: string | number) => setValues(v => ({ ...v, [field]: value }));

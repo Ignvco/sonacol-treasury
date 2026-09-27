@@ -27,11 +27,14 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20260926040000000_erp_native_operations.sql**: Versioned SONACOL operating rules initialized from ERP alone, editable classifications and explicit activation for existing installations; preserves prior configuration and historical snapshots.
+- **tests/erp-native-operations.test.ts**: Acceptance from an empty database using only ERP, native rules, customer bank configuration, manual payments, rescues, daily balances, reimports and frozen history.
 - **supabase/migrations/20260926030000000_caja_business_migration.sql**: Durable legacy evidence, atomic reviewed bindings (including MANUAL links) and optimistic preview/adoption of collection formulas.
 - **src/pages/planning/DecisionEvidence.tsx**: CAJA source and ERP target side-by-side for reviewing a correspondence; evidence survives removal of its original batch.
 - **src/pages/planning/CollectionPolicyDialog.tsx**: Review and adopt customer collection policies while retaining explicit dates and prior user edits.
 - **src/financial-engine/migration-comparison.ts**: Same-cut and same-currency daily reconciliation using the existing treasury engine, with cash coverage checks and event differences traced through reviewed bindings.
-- **src/pages/planning/MigrationComparison.tsx**: Read-only CAJA reference selector, daily balances and explanatory movements within Planning.
+- **src/pages/changes/index.tsx**, **src/pages/changes/MigrationComparison.tsx**: Snapshot differences and optional historical CAJA migration checks, separated from daily operation.
+- **src/pages/planning/OperatingRules.tsx**: Native operating configuration, real missing bank/classification inputs and links to manual commitments, daily forecasts and reports; does not require CAJA.
 - **tests/caja-migration.test.ts**, **tests/helpers/caja-migration.ts**: Anonymous CAJA-to-ERP fixtures and installed-version upgrade, binding/link, policy, deletion, reimport and daily comparison acceptance checks.
 - **tests/browser/caja-migration.spec.ts**: Production-build acceptance for reviewing ambiguous matches, applying formula policy and comparing daily results on desktop/mobile.
 - **src/import-engine/erp-profile.ts**: Versioned raw ERP report headers and sheet detection.

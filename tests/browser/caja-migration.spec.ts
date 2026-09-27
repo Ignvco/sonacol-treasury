@@ -8,7 +8,7 @@ test("CAJA review, formula adoption and daily comparison work with retained sour
     const { batch, legacy } = await migrationFixture(db);
     const snapshot = await migrationSnapshot(db, batch);
     await page.goto("/planning");
-    await expect(page.getByText("Correspondencias pendientes (2)", { exact: true })).toBeVisible();
+    await expect(page.getByText("Decisiones por revisar (2)", { exact: true })).toBeVisible();
     await page.getByRole("row").filter({ hasText: "Nombre antiguo" }).getByRole("button", { name: "Revisar correspondencia" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Origen conservado de CAJA", { exact: true })).toBeVisible();
@@ -18,8 +18,8 @@ test("CAJA review, formula adoption and daily comparison work with retained sour
     await dialog.getByRole("checkbox", { name: /Confirmo que revisé/ }).check();
     await dialog.getByRole("button", { name: "Guardar decisión" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.getByText("Correspondencias pendientes (1)", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Adoptar cobranza CAJA", exact: true }).click();
+    await expect(page.getByText("Decisiones por revisar (1)", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Configurar cobranzas", exact: true }).click();
     await dialog.getByRole("combobox", { name: "Cliente ERP", exact: true }).selectOption("C001");
     await dialog.getByRole("button", { name: "Revisar impacto" }).click();
     await expect(dialog.getByRole("region", { name: "Impacto de la regla" })).toContainText("2 fechas calculadas");
@@ -33,7 +33,9 @@ test("CAJA review, formula adoption and daily comparison work with retained sour
     await dialog.getByRole("checkbox", { name: /Confirmo que revisé/ }).check();
     await dialog.getByRole("button", { name: "Guardar decisión" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.getByText(/Correspondencias pendientes \(/)).toHaveCount(0);
+    await expect(page.getByText(/Decisiones por revisar \(/)).toHaveCount(0);
+    await page.goto("/changes");
+    await page.getByText("Control histórico de la migración (opcional)", { exact: true }).click();
     await page.getByRole("combobox", { name: "Carga CAJA de referencia", exact: true }).selectOption(legacy);
     await expect(page.getByText(/Coincidencia numérica en este corte y moneda/)).toBeVisible();
     await page.screenshot({ path: "test-results/caja-migration-desktop.png", fullPage: true, animations: "disabled" });
