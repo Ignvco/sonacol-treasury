@@ -19,6 +19,8 @@ export interface ResumenBentoProps {
   invested: number;
   minimum: number;
   minimumDate: string;
+  minimumIsCash?: boolean;
+  includesCutoff?: boolean;
   collections: number;
   payments: number;
   daily: { date: string; final: number }[];
@@ -47,6 +49,8 @@ export function ResumenBento({
   invested,
   minimum,
   minimumDate,
+  minimumIsCash = minimum === available,
+  includesCutoff = false,
   collections,
   payments,
   daily,
@@ -59,7 +63,7 @@ export function ResumenBento({
   onOpenDay,
 }: ResumenBentoProps) {
   const minimumDay = minimumDate;
-  const openMinimum = () => minimumDay === cutoff ? onOpenCash() : onOpenDay(minimumDay);
+  const openMinimum = () => minimumIsCash ? onOpenCash() : onOpenDay(minimumDay);
   const heaviest = days.reduce<{ date: string; expense: number } | null>(
     (worst, day) =>
       day.expense > 0 && (!worst || day.expense > worst.expense)
@@ -95,7 +99,7 @@ export function ResumenBento({
       key: "minimum",
       raw: minimumDay,
       title: "Mínimo desde el corte",
-      description: minimumDay === cutoff ? "saldo al inicio de la proyección" : "saldo más bajo del horizonte",
+      description: minimumIsCash ? "saldo bancario real al corte" : "cierre previsto más bajo del horizonte",
       amountText: formatAmount(minimum),
       onClick: openMinimum,
     },
@@ -127,7 +131,7 @@ export function ResumenBento({
         className="lg:col-span-2"
         icon={TrendingUp}
         title="Caja prevista"
-        subtitle={`Cierre al ${to} · próximos ${horizon} días`}
+        subtitle={`Cierre al ${to} · ${includesCutoff ? "corte y " : ""}próximos ${horizon} días`}
         trailing={
           <span className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
             {currencyLabel}

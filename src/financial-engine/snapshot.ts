@@ -66,6 +66,7 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
           ? (n.bank ?? "Sin banco")
           : (n.settlementBank ?? n.bank ?? "Sin banco"),
       ledger: n.ledgerCode ?? "",
+      settlementLedger: n.settlementLedger ?? (r.kind === "projection" ? n.ledgerCode ?? "" : ""),
       description: n.description ?? "",
       document: n.document ?? "",
       customer: n.customer ?? "",

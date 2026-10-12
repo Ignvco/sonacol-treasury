@@ -67,8 +67,9 @@ test("stale edits and attempts to rewrite accounting values are refused", async 
 
 test("frozen forecasts include the effective rules, adjustments and rescues and survive later edits", async () => {
  const before = await snapshot(), revision = await query(db, "select treasury_revision($1) s", [batch]);
- const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [batch, revision, JSON.stringify({ cutoff: before.batch!.cutoff, currency: "CLP", horizon: 30, minimum: 0 })]);
- assert.equal(before.engineVersion, "erp-business-plan-v2");
+ const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [batch, revision, JSON.stringify({ cutoff: before.batch!.cutoff, currency: "CLP", horizon: 30, minimum: 0, engineVersion: before.engineVersion })]);
+ assert.equal(before.engineVersion, "erp-cash-position-v3");
+ assert.equal(frozen.engine_version, before.engineVersion);
  assert.equal(frozen.snapshot.engineVersion, before.engineVersion);
  assert.deepEqual(frozen.snapshot.business, before.business);
  assert.deepEqual(frozen.snapshot.manual, before.manual);

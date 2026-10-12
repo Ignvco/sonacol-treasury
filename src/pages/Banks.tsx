@@ -20,7 +20,7 @@ export default function Banks() {
  if(loading)return <LoadingState/>;
  if(error)return <ErrorState message={error}/>;
  if(!data)return <NoBaseState/>;
- const model=baseTreasury(data.rows,data.links,data.cutoff,30,filters.currency,filters.bank);
+ const model=baseTreasury(data.rows,data.links,data.cutoff,30,filters.currency,filters.bank,data.engineVersion);
  const controls=bankControls(model.cashRows.map(r=>({normalized:r.normalized??{},row:r.row}))), erp=controls.length>0;
  return <div className="t-fade-in space-y-5">
   <PageHeader title="Saldos bancarios" subtitle={"Saldo contable calculado desde "+(erp?"ERP":"BASE")+" · corte "+data.cutoff} actions={<Link to="/reconciliation" className="t-button-secondary">Conciliación con cartola</Link>}/>

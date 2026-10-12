@@ -25,6 +25,7 @@ export default function Reports() {
   if (!state.data) return null;
   const { bundle, workspace } = state.data,
     context = {
+      engineVersion: bundle.engineVersion,
       cutoff: bundle.cutoff,
       currency: filters.currency,
       horizon: filters.horizon,
@@ -34,6 +35,7 @@ export default function Reports() {
       id: bundle.batch?.id ?? "",
       fileName: bundle.batch?.file_name ?? "Sin BASE",
       revision: workspace.revision,
+      warnings: bundle.warning ? [bundle.warning] : [],
     });
   const download = async (pdf: boolean) => {
     setBusy(true);
@@ -65,7 +67,7 @@ export default function Reports() {
                   Lote: report.source.id,
                   Archivo: report.source.fileName,
                   Revisión: report.source.revision,
-                  Motor: "decision-v1",
+                  Motor: bundle.engineVersion ?? "decision-v1",
                 },
               ],
             },
@@ -116,7 +118,7 @@ export default function Reports() {
         original, sin convertir con tasas de otra fecha.
       </p>
       <BentoStats
-        items={report.sections[0].rows.slice(0, 3).map((r, i) => ({
+        items={report.summary.map((r, i) => ({
           key: String(i),
           label: String(r.Métrica),
           valueText: baseNumber(Number(r.Valor)) + " " + filters.currency,

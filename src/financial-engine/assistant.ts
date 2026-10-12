@@ -94,7 +94,9 @@ export function answerTreasury(
     case "overdue":
       return {
         ...base,
-        text: `Hay ${m.overdue.length} movimientos cuya fecha prevista es igual o anterior al corte y siguen pendientes. Se proyectan al primer día del horizonte.`,
+        text: m.cutoffPosition
+          ? `Hay ${m.overdue.length} movimientos anteriores al corte que siguen pendientes. Se incluyen provisionalmente al día siguiente; requieren revisar su fecha y no forman parte del cierre previsto del corte.`
+          : `Hay ${m.overdue.length} movimientos cuya fecha prevista es igual o anterior al corte y siguen pendientes. Se proyectan al primer día del horizonte.`,
         rows: m.overdue,
       };
     case "changes": {

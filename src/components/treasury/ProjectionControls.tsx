@@ -64,7 +64,7 @@ export function ProjectionControls({
         <ToolbarDate
           label="Fecha de proyección"
           value={to}
-          min={from}
+          min={nextDate(data.cutoff, 1)}
           max={nextDate(data.cutoff, PROJECTION_HORIZON_MAX)}
           onSelect={(iso) =>
             setFilters((f) => ({ ...f, horizon: daysUntil(iso, data.cutoff) }))
@@ -127,6 +127,11 @@ export function ProjectionControls({
           <p>
             {amountDescription} Los filtros se comparten entre Resumen y Flujo
             de caja.
+          </p>
+          <p>
+            {from === data.cutoff
+              ? "La serie incluye los pendientes del corte y los días posteriores elegidos. Los vencidos anteriores quedan provisionalmente al día siguiente, para revisar su fecha."
+              : "Esta carga conserva el criterio anterior: los pendientes hasta el corte se proyectan al día siguiente."}
           </p>
         </InfoPopover>
       </Toolbar>

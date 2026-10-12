@@ -21,8 +21,12 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
     if (!rows.some(r => r.kind === "cash_flow" && r.origin === "BANCO" && r.currency === currency)) blocks.push(`${name} no incluye saldos bancarios en ${currency}; su ausencia no equivale a saldo cero.`);
   }
   if (blocks.length) return { blocks, warnings, days: [], changes: [], openingDelta: null, maxDifference: null, numericallyEqual: false };
-  const left = baseTreasury(leftRows, reference.links, reference.batch!.cutoff, horizon, currency);
-  const right = baseTreasury(rightRows, current.links, current.batch!.cutoff, horizon, currency);
+  // Recalculate the comparison under one explicit policy without modifying
+  // either stored snapshot. This is not an independent Excel reconciliation.
+  const left = baseTreasury(leftRows, reference.links, reference.batch!.cutoff, horizon, currency, "", current.engineVersion);
+  const right = baseTreasury(rightRows, current.links, current.batch!.cutoff, horizon, currency, "", current.engineVersion);
+  if (left.cutoffPosition && reference.engineVersion !== current.engineVersion)
+    warnings.push("La referencia CAJA se recalcula aquí con el criterio de fechas del ERP actual. Sus datos guardados no cambian; esta comparación no acredita por sí sola equivalencia con las fórmulas de Excel.");
   const leftAccounts = new Set(left.positions.map(p => p.ledger)), rightAccounts = new Set(right.positions.map(p => p.ledger));
   const absent = [...new Set([...leftAccounts, ...rightAccounts])].filter(k => !leftAccounts.has(k) || !rightAccounts.has(k));
   if (absent.length) warnings.push(`Cobertura de cuentas diferente: ${absent.join(", ")}. No acredita equivalencia.`);

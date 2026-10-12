@@ -1,20 +1,29 @@
 import { decisionModel, type DecisionContext } from "./decisions";
-import type { TreasuryRow, ForecastLink } from "./base-treasury";
+import { total, type TreasuryRow, type ForecastLink } from "./base-treasury";
 import { bankControls } from "./bank-control";
 export function executiveReport(
   rows: TreasuryRow[],
   links: ForecastLink[],
   context: DecisionContext,
-  source: { id: string; fileName: string; revision: string },
+  source: { id: string; fileName: string; revision: string; warnings?: string[] },
 ) {
   const model = decisionModel(rows, links, context);
   const controls = bankControls(model.cashRows.map(r => ({ normalized: r.normalized ?? {}, row: r.row })));
   const summary = [
     {
-      Métrica: "Caja disponible",
+      Métrica: "Saldo bancario real al corte",
       Valor: model.available,
       Moneda: context.currency,
     },
+    ...(model.cutoffPosition ? [
+      { Métrica: "Ingresos pendientes del corte", Valor: model.cutoffPosition.income, Moneda: context.currency },
+      { Métrica: "Egresos pendientes del corte", Valor: model.cutoffPosition.expense, Moneda: context.currency },
+      { Métrica: "Cierre previsto del corte", Valor: model.cutoffPosition.closing, Moneda: context.currency },
+    ] : []),
+    ...(controls.length ? [
+      { Métrica: "Ingresos bancarios registrados · Cargo", Valor: total(controls.map(c => c.income)), Moneda: context.currency },
+      { Métrica: "Egresos bancarios registrados · Abono", Valor: total(controls.map(c => c.expense)), Moneda: context.currency },
+    ] : []),
     {
       Métrica: "Saldo final previsto",
       Valor: model.projected,
@@ -36,8 +45,9 @@ export function executiveReport(
       Moneda: context.currency,
     },
   ];
-  const daily = model.days.map((d) => ({
+  const daily = model.days.map((d, i) => ({
     Fecha: d.date,
+    "Saldo inicial": i === 0 ? model.available : model.days[i - 1].balance,
     Ingresos: d.income,
     Egresos: d.expense,
     Saldo: d.balance,
@@ -47,30 +57,46 @@ export function executiveReport(
     Origen: r.origin,
     Descripción: r.description,
     Documento: r.document,
-    Fecha: r.kind === "cash_flow" ? r.date : r.plannedDate,
+    "Fecha de origen": r.date,
+    "Fecha prevista": "effectiveDate" in r ? r.plannedDate : "",
+    "Fecha del cálculo": "effectiveDate" in r ? String(r.effectiveDate) : r.date,
+    "Corte de la carga": context.cutoff,
+    Banco: r.bank,
+    "Cuenta de origen": r.ledger,
+    "Cuenta bancaria": r.kind === "cash_flow" ? r.ledger : r.settlementLedger ?? "",
+    "Inicio de período ERP": String(r.normalized?.periodStart ?? ""),
+    Tipo: "effectiveDate" in r ? "Pendiente" : "Registrado",
+    Cargo: r.normalized?.recordRole === "bank_movement" ? Number(r.normalized.debe) : "",
+    Abono: r.normalized?.recordRole === "bank_movement" ? Number(r.normalized.haber) : "",
     Capital: r.type === "expense" ? -r.amount : r.amount,
     Interés: r.interest,
     Flujo:
-      (r.type === "expense" ? -r.amount : r.amount) +
-      (r.kind === "cash_flow" ? 0 : r.interest),
+      "signed" in r ? Number(r.signed) : (r.type === "expense" ? -r.amount : r.amount),
     Moneda: r.currency,
     Archivo: r.fileName,
     Hoja: String(r.normalized?.sourceSheet ?? "BASE"),
     Fila: r.row ?? "",
     Identificador: r.recordId ?? r.id,
   }));
+  const warnings = [...new Set([...(source.warnings ?? []), ...model.issues, ...controls.flatMap(c => c.issues)])];
   return {
     title: "Informe ejecutivo de tesorería",
     subtitle: `Corte ${context.cutoff} · ${context.horizon} días · ${context.currency}`,
     context,
     source,
     model,
+    summary,
     sections: [
       { title: "Resumen", rows: summary },
       { title: "Flujo diario", rows: daily },
-      ...(controls.length ? [{ title: "Control bancario", rows: controls.map(c => ({ Banco: c.bank, Cuenta: c.ledger, Moneda: c.currency, Desde: c.periodStart, Corte: c.cutoff, SaldoInicial: c.opening, Cargos: c.income, Abonos: c.expense, SaldoCalculado: c.calculated, SaldoInformado: c.reported ?? "No informado", Diferencia: c.difference ?? "No comprobable", Observaciones: c.issues.join(" · ") || (c.reported === null ? "Pendiente de saldo final informado" : "Coincide") })) }] : []),
+      ...(model.cutoffPosition ? [{ title: "Posición al corte", rows: model.cutoffPosition.accounts.map(p => ({
+        Banco: p.bank, Cuenta: p.ledger, Moneda: p.currency, "Saldo real": p.amount,
+        "Ingresos pendientes": p.income, "Egresos pendientes": p.expense, "Cierre previsto": p.closing,
+      })) }] : []),
+      ...(controls.length ? [{ title: "Control bancario", rows: controls.map(c => ({ Banco: c.bank, Cuenta: c.ledger, Moneda: c.currency, Desde: c.periodStart, Corte: c.cutoff, SaldoInicial: c.opening, Cargos: c.income, Abonos: c.expense, SaldoCalculado: c.calculated, SaldoInformado: c.reported ?? "No informado", Diferencia: c.difference ?? "No comprobable", Observaciones: c.issues.join(" · ") || (c.reported === null ? "Saldo calculado; referencia final no informada" : "Coincide") })) }] : []),
       { title: "Trazabilidad", rows: provenance },
+      ...(warnings.length ? [{ title: "Observaciones", rows: warnings.map(w => ({ Observación: w })) }] : []),
     ],
-    warnings: model.issues,
+    warnings,
   };
 }

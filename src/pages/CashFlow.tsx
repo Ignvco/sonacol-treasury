@@ -5,6 +5,7 @@ import { useSavedFilters } from "@/hooks/use-saved-filters";
 import { useAsyncData } from "@/hooks/use-async";
 import { useProjectionView } from "@/hooks/use-projection-view";
 import { BankActivity } from "@/components/treasury/BankActivity";
+import { CashPosition } from "@/components/treasury/CashPosition";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
@@ -92,6 +93,7 @@ export default function CashFlow() {
   if (!data || !model) return <NoBaseState />;
   const variation = model.closing.final - model.available;
   const exportRows = projection.map((r) => ({
+    Motor: data.engineVersion ?? "decision-v1",
     BASE: data.batch?.file_name ?? "",
     Corte: data.cutoff,
     "Moneda de cálculo": filters.currency,
@@ -152,10 +154,12 @@ export default function CashFlow() {
         </p>
       ))}
       <BankActivity key={[data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
+      <CashPosition key={[data.batch?.id, filters.currency, filters.bank].join(":")} model={model} formatAmount={formatAmount} />
       <CashFlowBento
         cutoff={data.cutoff}
         to={model.to}
         horizon={filters.horizon}
+        includesCutoff={!!model.cutoffPosition}
         mode={mode}
         onModeChange={setMode}
         available={model.available}

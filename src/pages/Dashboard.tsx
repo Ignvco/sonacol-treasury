@@ -13,6 +13,7 @@ import { DataTable } from "@/components/treasury/DataTable";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { ResumenBento } from "@/components/treasury/bento/ResumenBento";
 import { BankActivity } from "@/components/treasury/BankActivity";
+import { CashPosition } from "@/components/treasury/CashPosition";
 import {
   LoadingState,
   ErrorState,
@@ -108,6 +109,7 @@ export default function Dashboard() {
       )}
 
       <BankActivity key={[data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
+      <CashPosition key={[data.batch?.id, filters.currency, filters.bank, refresh].join(":")} model={model} formatAmount={formatAmount} />
       <ResumenBento
         cutoff={data.cutoff}
         to={model.to}
@@ -118,6 +120,8 @@ export default function Dashboard() {
         invested={model.invested}
         minimum={model.minimum}
         minimumDate={model.minimumDate}
+        minimumIsCash={model.minimumIsCash}
+        includesCutoff={!!model.cutoffPosition}
         collections={model.collections}
         payments={model.payments}
         daily={model.daily}
@@ -176,8 +180,8 @@ export default function Dashboard() {
               {model.overdue.length} pendientes anteriores al corte
             </p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Se muestran en el primer día proyectado. Su cobro o rescate
-              todavía requiere confirmar la fecha.
+              Se mantienen provisionalmente en el día siguiente al corte.
+              Confirma la fecha de cobro o pago; no se presume su ejecución.
             </p>
           </button>
           {model.omittedRows.length > 0 && (

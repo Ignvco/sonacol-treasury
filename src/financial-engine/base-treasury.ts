@@ -5,7 +5,7 @@ export interface TreasuryRow {
   inLatest?: boolean;
   normalized?: Record<string, unknown>; revision?: number; batchId?: string; edited?: boolean;
   origin: string; amount: number; currency: string; type: string; status: string;
-  date: string; plannedDate: string; bank: string; ledger: string; description: string;
+  date: string; plannedDate: string; bank: string; ledger: string; settlementLedger?: string; description: string;
   document: string; customer: string; interest: number; cutoff: string;
   fileName: string; row: number | null; recordId: string | null;
 }
@@ -24,8 +24,12 @@ export const nextDate = (date: string, days: number) => {
   return value.toISOString().slice(0, 10);
 };
 export const sourceKey = (r: Pick<TreasuryRow, "kind" | "id">) => r.kind + ":" + r.id;
-export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff: string, horizon = 30, currency = "BASE", bank = "") {
+export const CASH_POSITION_ENGINE = "erp-cash-position-v3";
+export const includesCutoffDay = (engineVersion?: string) => engineVersion === CASH_POSITION_ENGINE;
+export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff: string, horizon = 30, currency = "BASE", bank = "", engineVersion?: string) {
   if (!isTreasuryDate(cutoff) || (!Number.isInteger(horizon) || horizon < 1 || horizon > 366)) throw new Error("Fecha u horizonte inválidos.");
+  // Missing/older versions retain the exact next-day policy of saved forecasts.
+  const includeCutoff = includesCutoffDay(engineVersion);
   const rows = [...new Map(input.map(r => [sourceKey(r), r])).values()];
   const matches = (r: TreasuryRow) => (currency === "BASE" || r.currency === currency) && (!bank || r.bank === bank);
   const sign = (r: TreasuryRow) => r.normalized && isErpBank(r.normalized) ? erpBankSigned(r.normalized) : r.type === "expense" ? -r.amount : r.amount;
@@ -53,14 +57,20 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
     if (!Number.isFinite(executed) || executed < 0 || total([executed, -r.amount]) > 0)
       throw new Error(`La ejecución registrada supera o invalida el importe de ${r.description}. Revisa el compromiso o el supuesto del escenario.`);
     const remaining = r.kind === "projection" ? pendingProjectionAmount(r.amount, executed) : r.amount;
+    if (includeCutoff && !isTreasuryDate(r.plannedDate))
+      throw new Error(`Falta una fecha prevista válida para ${r.description || r.document || r.id}. Revisa la planificación.`);
     return {
-      ...r, amount: remaining, effectiveDate: r.plannedDate <= cutoff ? nextDate(cutoff, 1) : r.plannedDate,
-      overdue: r.plannedDate <= cutoff, signed: sign({ ...r, amount: remaining }) + r.interest, replaces: replacement.get(sourceKey(r)),
+      ...r, amount: remaining,
+      effectiveDate: r.plannedDate < cutoff || (!includeCutoff && r.plannedDate === cutoff) ? nextDate(cutoff, 1) : r.plannedDate,
+      overdue: includeCutoff ? r.plannedDate < cutoff : r.plannedDate <= cutoff,
+      signed: sign({ ...r, amount: remaining }) + r.interest, replaces: replacement.get(sourceKey(r)),
     };
   }).filter(r => !(r.kind === "projection" && r.amount === 0 && Number(r.normalized?.executedAmount ?? 0) > 0) && matches(r) && r.effectiveDate <= nextDate(cutoff, horizon)).sort((a,b) => a.effectiveDate.localeCompare(b.effectiveDate));
   const available = total(cashRows.map(sign));
-  const days = Array.from({length:horizon}, (_,i) => {
-    const date = nextDate(cutoff,i+1), movements = events.filter(r => r.effectiveDate === date);
+  // The cutoff row is pending activity after the imported cash position, not
+  // another copy of the bank movements already contained in available.
+  const days = Array.from({length:horizon + (includeCutoff ? 1 : 0)}, (_,i) => {
+    const date = nextDate(cutoff,i + (includeCutoff ? 0 : 1)), movements = events.filter(r => r.effectiveDate === date);
     return {date, income:total(movements.filter(r=>r.signed>0).map(r=>r.signed)), expense:total(movements.filter(r=>r.signed<0).map(r=>-r.signed)),
       balance:total([available,...events.filter(r=>r.effectiveDate<=date).map(r=>r.signed)])};
   });
@@ -70,7 +80,35 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
   }).sort((a,b)=>b.amount-a.amount);
   const collectionRows = events.filter(r=>r.signed>0), paymentRows=events.filter(r=>r.signed<0);
   const investedRows = rows.filter(r=>r.inLatest!==false && r.kind==="investment" && !["rescatada","cancelado"].includes(r.status) && matches(r));
-  return {available,cashRows,events,days,positions,collectionRows,paymentRows,investedRows,
+  const cutoffEvents = includeCutoff ? events.filter(r => r.effectiveDate === cutoff) : [];
+  const cutoffIncome = total(cutoffEvents.filter(r => r.signed > 0).map(r => r.signed));
+  const cutoffExpense = total(cutoffEvents.filter(r => r.signed < 0).map(r => -r.signed));
+  const accountEvents = new Map<string, ForecastEvent[]>();
+  const unassigned: ForecastEvent[] = [];
+  for (const event of cutoffEvents) {
+    const ledger = event.settlementLedger || (event.kind === "projection" ? event.ledger : "");
+    const candidates = positions.filter(p => p.currency === event.currency &&
+      (ledger ? p.ledger === ledger : p.bank === event.bank));
+    if (candidates.length !== 1) { unassigned.push(event); continue; }
+    const key = candidates[0].key;
+    accountEvents.set(key, [...(accountEvents.get(key) ?? []), event]);
+  }
+  const cutoffAccounts = positions.map(p => {
+    const movements = accountEvents.get(p.key) ?? [];
+    const income = total(movements.filter(r => r.signed > 0).map(r => r.signed));
+    const expense = total(movements.filter(r => r.signed < 0).map(r => -r.signed));
+    return { ...p, income, expense, closing: total([p.amount, income, -expense]), events: movements };
+  });
+  const cutoffPosition = includeCutoff ? {
+    date: cutoff, available, income: cutoffIncome, expense: cutoffExpense,
+    closing: total([available, cutoffIncome, -cutoffExpense]), events: cutoffEvents,
+    accounts: cutoffAccounts, unassigned,
+  } : null;
+  if (unassigned.length)
+    issues.push(`${unassigned.length} pendientes del corte no tienen una cuenta bancaria única dentro de la cobertura. Se incluyen en el total de su moneda, pero no se asignan a otra cuenta ni se inventa un saldo bancario.`);
+  if (includeCutoff && events.some(r => r.overdue))
+    issues.push("Los pendientes anteriores al corte se mantienen provisionalmente en el día siguiente. No están incluidos en el cierre previsto del corte; revisa sus fechas. No se presume su cobro ni pago.");
+  return {available,cashRows,events,days,positions,collectionRows,paymentRows,investedRows,cutoffPosition,engineVersion,
     collections:total(collectionRows.map(r=>r.signed)),payments:total(paymentRows.map(r=>-r.signed)),
     invested:total(investedRows.map(r=>r.amount)),projected:days[days.length-1]?.balance??available,
     overdue:events.filter(r=>r.overdue),omittedRows:rows.filter(r=>r.inLatest===false),issues,minimum:Math.min(available,...days.map(r=>r.balance))};

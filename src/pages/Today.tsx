@@ -44,7 +44,7 @@ export default function Today() {
   const { bundle, workspace, members } = data,
     { currency, horizon } = filters;
   const minimum = Number(workspace.settings.minimums[currency] ?? 0);
-  const context = { cutoff: bundle.cutoff, currency, horizon, minimum };
+  const context = { cutoff: bundle.cutoff, currency, horizon, minimum, engineVersion: bundle.engineVersion };
   const model = decisionModel(bundle.rows, bundle.links, context);
   const previous = workspace.previous,
     bridge = previous?.batch

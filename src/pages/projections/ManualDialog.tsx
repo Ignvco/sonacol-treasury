@@ -149,6 +149,7 @@ export function ManualDialog({
     if (state.data && Number(amount) > 0) {
       const bundle = state.data.bundle,
         ctx = {
+          engineVersion: bundle.engineVersion,
           cutoff: bundle.cutoff,
           currency: form.currency,
           horizon: 30,

@@ -24,6 +24,7 @@ export function CashFlowBento({
   cutoff,
   to,
   horizon,
+  includesCutoff = false,
   mode,
   onModeChange,
   available,
@@ -38,6 +39,7 @@ export function CashFlowBento({
   cutoff: string;
   to: string;
   horizon: number;
+  includesCutoff?: boolean;
   mode: ChartMode;
   onModeChange: (mode: ChartMode) => void;
   available: number;
@@ -60,7 +62,7 @@ export function CashFlowBento({
         className="lg:col-span-2"
         icon={Activity}
         title="Proyección de liquidez"
-        subtitle={`Serie ${MODE_LABEL[mode].toLowerCase()} · próximos ${horizon} días`}
+        subtitle={`Serie ${MODE_LABEL[mode].toLowerCase()} · ${includesCutoff ? "corte y " : ""}próximos ${horizon} días`}
         trailing={
           <PeriodToggle<ChartMode>
             value={mode}
@@ -104,7 +106,7 @@ export function CashFlowBento({
         style={{ animationDelay: "80ms" }}
         icon={ArrowLeftRight}
         title="Entradas y salidas"
-        subtitle={`Previstas en los próximos ${horizon} días`}
+        subtitle={`Previstas ${includesCutoff ? "al corte y " : ""}en los próximos ${horizon} días`}
         netText={formatAmount(variation)}
         netPositive={variation >= 0}
         incomeShare={incomeShare}

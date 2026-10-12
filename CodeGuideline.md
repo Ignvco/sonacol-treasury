@@ -27,6 +27,9 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20261012000000000_cash_position.sql**: Batch-scoped projection policy; activates cutoff-day planning for the current and subsequent ERP loads while preserving older batches and saved forecasts.
+- **src/components/treasury/CashPosition.tsx**: Shared cutoff cash bridge, with separate real cash, pending income/expense and projected closing, and source drill-downs in Resumen and Flujo.
+- **tests/cash-position.test.ts**: Cutoff-day planning, partial execution, receiving accounts, daily aggregation and saved-policy regression cases; this patch delivers the cases without executing them.
 - **supabase/migrations/20260928000000000_initial_business_plan.sql**: Reviewed SONACOL planning bootstrap with preserved source evidence, duplicate/conflict control, and partial execution against bank postings; original ERP rows and earlier snapshots remain unchanged.
 - **src/services/initialPlanService.ts**, **src/pages/planning/InitialPlan.tsx**: Preview and incorporate missing initial commitments once; the subsequent ERP imports carry the same business records.
 - **src/pages/projections/ManualExecutionDialog.tsx**: Explicit allocation and reversal of a bank posting against a planned commitment, with remaining-amount and concurrency controls.

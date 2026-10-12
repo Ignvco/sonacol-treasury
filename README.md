@@ -1261,3 +1261,64 @@ git apply ~/Downloads/sonacol-planificacion-check.patch
 ```
 
 Esta entrega modifica únicamente dos archivos de pruebas y esta documentación. No requiere nuevas migraciones SQL. Por instrucción del usuario, no se ejecutaron pruebas, TypeScript, lint, build ni migraciones al preparar esta corrección; la revisión fue por lectura de código y diff.
+
+## 33. Patch 1: saldo real y cierre previsto del corte
+
+**Entrega con revisión de código y diff. Sin ejecutar pruebas, TypeScript, lint, build, macros ni migraciones, por instrucción del usuario. Las verificaciones de entregas anteriores no validan este patch.**
+
+`sonacol-posicion-caja.patch` parte del commit `10f2ca29bd10e3c15bcc08a43e8bb40b96163be1` de `feat/erp-native-operations`, que ya contiene `sonacol-planificacion-check.patch`. Requiere las migraciones anteriores hasta `20260928000000000_initial_business_plan.sql` y agrega `20261012000000000_cash_position.sql`.
+
+### Criterio financiero
+
+La lectura bancaria existente ya utiliza **Cargo − Abono** y mantiene aperturas separadas. La brecha identificada era posterior: todos los pendientes con fecha igual o anterior al corte se trasladaban al día siguiente. Además, los consumidores del snapshot descartaban su versión de cálculo.
+
+Para las cargas ERP con versión `erp-cash-position-v3`, Resumen, Flujo, reportes, escenarios, agenda y asistente utilizan el mismo criterio:
+
+| Concepto | Composición |
+| --- | --- |
+| Saldo bancario real al corte | Saldo inicial + cargos registrados − abonos registrados |
+| Ingresos pendientes del corte | Cobros y rescates programados para esa fecha, todavía pendientes |
+| Egresos pendientes del corte | Compromisos de esa fecha menos su ejecución vinculada |
+| Cierre previsto del corte | Saldo real + ingresos pendientes − egresos pendientes |
+| Apertura proyectada del día siguiente | Cierre previsto del corte |
+
+Los movimientos bancarios registrados no se vuelven a proyectar. Las posiciones de inversión siguen siendo capital invertido; únicamente los rescates programados son eventos de ingreso. La categoría descriptiva no cambia el signo bancario. La ausencia de saldo final informado en ERP permite calcular el saldo y deja la comparación externa como «No comprobable».
+
+Los pendientes **anteriores** al corte conservan su fecha original y la inclusión provisional en el día siguiente, con aviso explícito para revisar sus fechas. No se consideran cobros/pagos realizados ni se atribuyen al cierre del corte. Adoptar otra regla para estos vencidos requiere una decisión de negocio; este patch no presume que todo lo atrasado ocurrirá hoy.
+
+El horizonte conserva su fecha final: un corte 09/10 con horizonte de 7 días termina el 16/10. La nueva serie contiene la fila pendiente del 09/10 y los 7 días posteriores, 8 filas en total. El mínimo considera tanto la caja real al corte como los cierres previstos. Si el mínimo corresponde al cierre previsto del corte, su enlace abre ese cálculo. Los días bajo umbral se cuentan una sola vez por fecha.
+
+### Trazabilidad y cuentas
+
+La sección compartida «Posición de caja» muestra las cuatro cifras y sus movimientos, además del detalle por cuenta y moneda original. Para cobros y rescates utiliza la cuenta receptora (`settlementLedger`), separada de la cuenta contable de origen. Si solo hay un banco declarado, se asigna exclusivamente cuando existe una única cuenta de esa moneda en la cobertura. Un pendiente sin cuenta única sigue incluido en el total filtrado y aparece para revisión; no se inventa saldo para esa cuenta.
+
+Los reportes incluyen apertura diaria, egresos bancarios registrados, pendientes del corte, posición por cuenta y fechas de origen, planificación y cálculo. Conservan los avisos de cobertura y negocio. Los filtros de Resumen y Flujo siguen compartidos. Para comparar cifras utiliza la misma carga, moneda, banco y horizonte; los reportes ejecutivos muestran la moneda original y el total de bancos. La opción literal BASE de las vistas históricas no es una conversión de monedas.
+
+La comparación CAJA/ERP utiliza un criterio de fechas común y avisa cuando recalcula la referencia antigua con el nuevo criterio. Sigue siendo una comparación dentro del motor; no sustituye la comprobación independiente de Excel prevista para la etapa de equivalencia.
+
+### Activación e históricos
+
+La migración agrega `daily_base_batches.projection_engine_version`. Mantiene el criterio anterior en las cargas existentes y activa el nuevo únicamente en la última carga global si corresponde a ERP. Las cargas nuevas guardan la nueva versión; el RPC solo la aplica al perfil ERP. Las cargas BASE/CAJA conservan su comportamiento anterior.
+
+Una carga ERP activada conserva su versión cuando pasa a ser histórica. Las cargas ERP históricas anteriores a la migración mantienen el criterio previo. No se reescriben importes, fechas, datos originales, compromisos ni snapshots de escenarios/previsiones congeladas. Estos últimos se calculan usando la versión guardada dentro del snapshot. Una previsión sin versión conserva el criterio anterior.
+
+La activación cambia la revisión del espacio de trabajo: es necesario actualizar la aplicación y volver a revisar los escenarios que se quieran rebasar sobre la carga vigente. Los nuevos guardados registran el motor real y rechazan un contexto con criterio desactualizado. El SQL debe instalarse junto con el frontend de esta entrega.
+
+### Aplicación
+
+Desde la raíz del repositorio, sobre la rama indicada y el patch anterior ya incorporado:
+
+```bash
+git apply ~/Downloads/sonacol-posicion-caja.patch
+pbcopy < supabase/migrations/20261012000000000_cash_position.sql
+```
+
+Ejecuta el SQL copiado en el editor de tu proyecto Supabase. Actualiza el frontend por tu procedimiento habitual y recarga la aplicación. Selecciona la última carga ERP para ver «Posición de caja». No hace falta reimportar esa carga si era la última al instalar la migración. Si tenías seleccionada una carga histórica anterior, continuará mostrando el criterio antiguo.
+
+### Alcance de la entrega y validación pendiente
+
+La auditoría del CAJA 09/10 distinguió $2.172.083.343 de saldo contable y $2.886.785.491 de cierre previsto, después de $852.295.153 de rescate y $137.593.005 de egresos manuales del día. Son referencias de la auditoría del archivo, **no resultados obtenidos al ejecutar este patch**. La antigua ERP tiene otro corte; este cambio no fabrica datos actualizados ni garantiza esos importes en la instalación actual.
+
+La planificación vigente, las colocaciones propuestas y el remanente posterior a colocaciones corresponden al siguiente patch. Esta entrega no reemplaza automáticamente los 43 compromisos iniciales de septiembre por los 38 de octubre. El resultado previsto sigue dependiendo de las decisiones realmente registradas en la plataforma.
+
+Se incorporan casos de regresión para cierre del corte, Cargo/Abono, ejecución parcial/completa, cuenta receptora, pendientes sin cuenta, monedas, vencidos, agregación semanal/mensual, coherencia de reportes/escenarios, mínimo al corte y actualización de una instalación con históricos congelados. Se adaptan tres llamadas de pruebas existentes al contexto versionado. **Ninguno de estos casos fue ejecutado**; la compilación, la integración SQL y el comportamiento de navegador quedan pendientes de verificación. No se modificó producción ni se hizo push o despliegue.

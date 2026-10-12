@@ -1,6 +1,5 @@
 import {
   baseTreasury,
-  nextDate,
   total,
   type ForecastLink,
   type TreasuryRow,
@@ -56,7 +55,7 @@ export function projectionFilters(value: ProjectionFilters): ProjectionFilters {
 
 /** Both operational views consume this exact daily series and its closing row. */
 export function snapshotProjection(
-  snapshot: { rows: TreasuryRow[]; links: ForecastLink[]; cutoff: string },
+  snapshot: { rows: TreasuryRow[]; links: ForecastLink[]; cutoff: string; engineVersion?: string },
   preferences: ProjectionFilters = PROJECTION_DEFAULTS,
 ) {
   const filters = projectionFilters(preferences);
@@ -67,6 +66,7 @@ export function snapshotProjection(
     filters.horizon,
     filters.currency,
     filters.bank,
+    snapshot.engineVersion,
   );
   const daily: DailyProjection[] = model.days.map((day, i) => ({
     date: day.date,
@@ -81,11 +81,12 @@ export function snapshotProjection(
     ...model,
     bankActivity: bankActivity(model.cashRows, snapshot.cutoff),
     minimumDate: model.minimum === model.available ? snapshot.cutoff : model.days.find(d => d.balance === model.minimum)!.date,
+    minimumIsCash: model.minimum === model.available,
     daily,
     closing,
     projected: closing.final,
     cutoff: snapshot.cutoff,
-    from: nextDate(snapshot.cutoff, 1),
+    from: daily[0].date,
     to: closing.date,
     filters,
   };

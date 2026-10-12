@@ -50,7 +50,7 @@ test("empty installation operates from ERP alone: native rules, manual payments,
     const raw = await query(db, "select normalized_json s from daily_base_rows where id=$1", [invoice.recordId]);
     assert.equal(raw.reportDate, null); assert.equal(raw.adjustedDate, null);
     const revision = await query(db, "select treasury_revision($1) s", [b.id]);
-    const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [b.id, revision, JSON.stringify({ cutoff: snap.batch!.cutoff, currency: "CLP", horizon: 30, minimum: 0 })]);
+    const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [b.id, revision, JSON.stringify({ cutoff: snap.batch!.cutoff, currency: "CLP", horizon: 30, minimum: 0, engineVersion: snap.engineVersion })]);
     const pac = snap.business!.find(d => d.values_json.contains === "PAGO PAC")!;
     await save("rule", pac.target_key, pac.values_json, pac, true);
     await save("redemption", rescue.target_key, { ...rescue.values_json, status: "executed" }, rescue);
