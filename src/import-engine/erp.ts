@@ -3,6 +3,7 @@ import { cellText, cellToDate, cellToNumber, isErrorCell } from "./detect";
 import { ERP_HEADERS, ERP_PROFILE, headerKey, type ErpSheet } from "./erp-profile";
 import { MAX_IMPORT_ROWS, type ProcessedRecord } from "./types";
 import type { WorkSheetData } from "./pipeline";
+import { readErpBankBalances } from "./erp-bank-balances";
 
 const text = (v: unknown) => cellText(v).trim();
 const moneyCurrency = (v: unknown) => text(v).match(/\b(CLP|USD|UF|UTM)\b/i)?.[1].toUpperCase();
@@ -10,9 +11,12 @@ const moneyCurrency = (v: unknown) => text(v).match(/\b(CLP|USD|UF|UTM)\b/i)?.[1
 /** Sparse cell traversal preserves Excel coordinates and avoids formatted empty ranges. */
 export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSheetData[] {
   const sheets: WorkSheetData[] = [];
+  const balanceName = names.get("SALDOS BANCOS");
+  const bankBalances = balanceName ? readErpBankBalances(wb, balanceName) : null;
   const occurrences = new Map<string, number>();
-  let count = 0;
+  let count = bankBalances?.sheet.prepared?.length ?? 0;
   for (const [kind, name] of names) {
+    if (kind === "SALDOS BANCOS") continue;
     const ws = wb.Sheets[name], rows = new Map<number, Map<number, XLSX.CellObject>>();
     for (const [address, value] of Object.entries(ws)) {
       if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(address) || (!text(value) && !value.f)) continue;
@@ -69,6 +73,18 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       };
       let signed = 0;
       if (kind === "BANCOS") {
+        if (bankBalances) {
+          const legacyOpening = value("date").toUpperCase() === "ACTIVOS";
+          const account = bankBalances.accounts.get(value(legacyOpening ? "dueDate" : "ledger"));
+          if (legacyOpening) {
+            const amount = number("debit", true) - number("credit", true);
+            if (!account || account.status === "ERROR" || errors.length || Math.abs(Number(account.normalized.signedAmount) - amount) > 0.005)
+              throw new Error(`${name}!${row}: la apertura de ${value("dueDate")} no coincide con SALDOS BANCOS. Revisa ambas fuentes; no se sumarán dos aperturas.`);
+            continue;
+          }
+          bankLedger = value("ledger"); bank = String(account?.normalized.bank ?? ""); bankCurrency = String(account?.normalized.currency ?? "");
+          if (!account || account.status === "ERROR") errors.push(`Cuenta ${bankLedger || "sin código"} sin saldo inicial válido en SALDOS BANCOS.`);
+        }
         if (value("date").toUpperCase() === "ACTIVOS") {
           bankLedger = required("dueDate"); bank = required("description");
           bankCurrency = moneyCurrency(get("debit")) ?? moneyCurrency(get("credit")) ?? "";
@@ -77,7 +93,7 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
           signed = number("debit", true) - number("credit", true);
           Object.assign(n, { recordRole: "bank_opening", date: null, description: "Saldo de apertura · " + bank });
         } else {
-          if (!bankLedger) errors.push("Movimiento sin cabecera de cuenta Activos.");
+          if (!bankLedger && !bankBalances) errors.push("Movimiento sin cabecera de cuenta Activos. Incluye SALDOS BANCOS con las aperturas por cuenta.");
           if (required("ledger") !== bankLedger) errors.push("La cuenta de la fila no coincide con su cabecera.");
           const debit = number("debit", true), credit = number("credit", true);
           if (debit < 0 || credit < 0 || (debit > 0 && credit > 0)) errors.push("Cargo/Abono inválidos o ambos lados con importe.");
@@ -132,8 +148,9 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
     }
     skipped = Math.max(0, (ordered[ordered.length - 1] ?? header) - header - records.length);
     const firstMovementDate = records.filter(r => String(r.normalized.recordRole).endsWith("_movement")).map(r => String(r.normalized.date ?? "")).filter(Boolean).sort()[0] ?? null;
-    sheets.push({ name, rows: [], prepared: records, profile: ERP_PROFILE, headerIndex: header, reading: { profileId: ERP_PROFILE, sheetName: name, firstMovementDate, headerRow: header, firstDataRow: records[0]?.row ?? null, lastDataRow: records[records.length - 1]?.row ?? null, ignoredRows: skipped, missingOptional: [], currencyColumn: "Importes ML", cutoffSource: "user", cutoff: null, workbookCutoff: null, cutoffFormula: null, lastBankDate: null, cutoffIssue: "Define corte e inicio del período ERP para importar." }, note: "Datos crudos ERP. Los ajustes, reglas y proyecciones se mantienen en la plataforma." });
+    sheets.push({ name, rows: [], prepared: records, profile: ERP_PROFILE, headerIndex: header, reading: { profileId: ERP_PROFILE, erpReport: kind, sheetName: name, firstMovementDate, headerRow: header, firstDataRow: records[0]?.row ?? null, lastDataRow: records[records.length - 1]?.row ?? null, ignoredRows: skipped, missingOptional: [], currencyColumn: "Importes ML", cutoffSource: "user", cutoff: null, workbookCutoff: null, cutoffFormula: null, lastBankDate: null, cutoffIssue: "Define corte e inicio del período ERP para importar." }, note: "Datos crudos ERP. Los ajustes, reglas y proyecciones se mantienen en la plataforma." });
   }
+  if (bankBalances) sheets.push(bankBalances.sheet);
   const lastDate = sheets.flatMap(s => s.prepared ?? []).map(r => String(r.normalized.date ?? r.normalized.issueDate ?? "")).filter(Boolean).sort().slice(-1)[0] ?? null;
   for (const sheet of sheets) sheet.reading!.lastBankDate = lastDate;
   return sheets;

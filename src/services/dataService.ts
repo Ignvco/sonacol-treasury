@@ -494,6 +494,7 @@ export const dataService = {
         batchId: r.batchId,
         revision: r.revision,
         edited: r.edited,
+        executedAmount: Number(r.normalized?.executedAmount ?? 0),
       }));
   },
   async getPayments(): Promise<Payment[]> {

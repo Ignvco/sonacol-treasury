@@ -165,6 +165,7 @@ export function ManualDialog({
       for (const [i, d] of dates.entries())
         next.push({
           ...template,
+          normalized: existing ? template?.normalized : undefined,
           id: existing ? initial!.id : "preview-" + i,
           kind: "projection",
           origin: "MANUAL",

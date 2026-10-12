@@ -1,5 +1,6 @@
 import { importControlTotals } from "@/import-engine/control-totals";
 import type { ProcessedRecord } from "@/import-engine/types";
+import { BankControlTable } from "@/components/treasury/BankControlTable";
 
 const format = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
 export function ImportControlTotals({ records }: { records: ProcessedRecord[] }) {
@@ -8,7 +9,7 @@ export function ImportControlTotals({ records }: { records: ProcessedRecord[] })
   const inferred = records.filter(r => ["VALID", "WARNING"].includes(r.status) && typeof r.normalized.inferredOpeningBalance === "number");
   const title = records.some(r => r.normalized.sourceProfile === "ERP-RAW-v1") ? "Control de importes del archivo" : "Control de importes de BASE";
   return (
-    <section aria-label={title} className="mb-4 rounded-xl border p-4">
+    <><section aria-label={title} className="mb-4 rounded-xl border p-4">
       <h3 className="font-semibold">{title}</h3>
       <p className="mt-1 text-xs text-muted-foreground">
         Suma con signo de las filas válidas, por origen y moneda. Son importes del archivo, no cobros o pagos confirmados del período.
@@ -32,6 +33,6 @@ export function ImportControlTotals({ records }: { records: ProcessedRecord[] })
         <p className="mt-1 text-xs">No hay fila OB para estas cuentas. La plataforma suma esta apertura al movimiento neto para obtener la posición; no añade filas al Excel ni la cuenta como ingreso.</p>
         <ul className="mt-2 space-y-1">{inferred.map(r => <li key={r.sheet + r.row}>{r.sheet}!{r.row} · cuenta {String(r.normalized.ledgerCode)}: {format.format(Number(r.normalized.balance))} − ({format.format(Number(r.normalized.signedAmount))}) = <strong>{format.format(Number(r.normalized.inferredOpeningBalance))} {String(r.normalized.currency)}</strong>.</li>)}</ul>
       </div>}
-    </section>
+    </section><BankControlTable records={records} /></>
   );
 }

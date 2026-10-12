@@ -3,6 +3,7 @@
  * ============================================================ */
 
 import type { ImportEntityType, ImportRecordStatus } from "@/financial-engine/types";
+import type { ErpSheet } from "./erp-profile";
 
 export interface DetectedColumn {
   key: string;
@@ -25,6 +26,7 @@ export interface SheetResult {
 }
 
 export interface BaseReadingSummary {
+  erpReport?: ErpSheet;
   firstMovementDate?: string | null;
   sheetName?: string;
   periodStart?: string | null;

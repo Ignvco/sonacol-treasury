@@ -12,6 +12,7 @@ import {
 import { DataTable } from "@/components/treasury/DataTable";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { ResumenBento } from "@/components/treasury/bento/ResumenBento";
+import { BankActivity } from "@/components/treasury/BankActivity";
 import {
   LoadingState,
   ErrorState,
@@ -93,6 +94,7 @@ export default function Dashboard() {
           className="rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning"
         >
           {data.warning}
+          <Link to="/planning" className="mt-2 block underline">Revisar plan de cobros y pagos</Link>
         </p>
       )}
       {!data.rows.length && (
@@ -105,6 +107,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      <BankActivity key={[data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
       <ResumenBento
         cutoff={data.cutoff}
         to={model.to}
@@ -114,6 +117,7 @@ export default function Dashboard() {
         projected={model.closing.final}
         invested={model.invested}
         minimum={model.minimum}
+        minimumDate={model.minimumDate}
         collections={model.collections}
         payments={model.payments}
         daily={model.daily}

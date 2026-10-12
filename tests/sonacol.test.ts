@@ -47,7 +47,7 @@ test("BASE only: wrong REAL value is rejected and original USD is preserved",()=
 test("BASE only: missing or ambiguous BASE never falls back to other worksheets",async()=>{
   assert.throws(()=>findBaseSheet(["BASE"," base "]),/más de una/);
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Fecha","Monto"],[46276,50]]),"MACRO BANCO");
-  await assert.rejects(parseWorkbook(XLSX.write(wb,{type:"array",bookType:"xlsx"})),/No se encontró la hoja BASE/);
+  await assert.rejects(parseWorkbook(XLSX.write(wb,{type:"array",bookType:"xlsx"})),/No se reconocieron los reportes ERP.*encabezados/);
 });
 test("BASE only: other worksheet objects are never accessed even when formulas reference them",()=>{
   const wb=baseFixture();

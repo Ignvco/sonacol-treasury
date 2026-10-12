@@ -27,6 +27,18 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20260928000000000_initial_business_plan.sql**: Reviewed SONACOL planning bootstrap with preserved source evidence, duplicate/conflict control, and partial execution against bank postings; original ERP rows and earlier snapshots remain unchanged.
+- **src/services/initialPlanService.ts**, **src/pages/planning/InitialPlan.tsx**: Preview and incorporate missing initial commitments once; the subsequent ERP imports carry the same business records.
+- **src/pages/projections/ManualExecutionDialog.tsx**: Explicit allocation and reversal of a bank posting against a planned commitment, with remaining-amount and concurrency controls.
+- **src/financial-engine/bank-activity.ts**: Registered ERP income/expense and daily bank cash, excluding openings from period flows and keeping past postings out of forecasts.
+- **src/components/treasury/BankActivity.tsx**: Shared registered-cash summary and daily/source drill-down in Resumen and Flujo de caja, using their selected snapshot, bank and currency.
+- **tests/cashflow-activity.test.ts**, **tests/browser/cashflow-activity.spec.ts**: Actual expenses versus future commitments, exact daily/weekly/monthly balances, minimum-date and empty-flow regressions.
+- **tests/erp-bank-balances.test.ts**, **tests/browser/erp-bank-balances.spec.ts**: Separate bank opening accounts, Cargo/Abono signs, reported closing controls, installed database upgrade and shared cash totals through the browser and financial consumers.
+- **src/import-engine/erp-bank-balances.ts**: Reads SALDOS BANCOS opening accounts and optional reported closing balances, preserving cells and keeping openings out of period income.
+- **src/financial-engine/bank-control.ts**: Signed ERP bank validation and per-account opening + Cargo − Abono controls; missing reported balances remain unknown.
+- **src/components/treasury/BankControlTable.tsx**: Per-account balances, period income/expense and explicit missing/differing closing references in import preview and Banks.
+- **supabase/migrations/20260927000000000_erp_bank_balances.sql**: Independent SQL bank controls, separate opening/movement sources, account coverage and optional reported balance reconciliation; no historical rewrite.
+- **supabase/migrations/20260926050000000_erp_report_sheet_names.sql**: Accepts original ERP worksheet names independently of report roles, preserving provenance, unique report mapping and existing financial validation.
 - **supabase/migrations/20260926040000000_erp_native_operations.sql**: Versioned SONACOL operating rules initialized from ERP alone, editable classifications and explicit activation for existing installations; preserves prior configuration and historical snapshots.
 - **tests/erp-native-operations.test.ts**: Acceptance from an empty database using only ERP, native rules, customer bank configuration, manual payments, rescues, daily balances, reimports and frozen history.
 - **supabase/migrations/20260926030000000_caja_business_migration.sql**: Durable legacy evidence, atomic reviewed bindings (including MANUAL links) and optimistic preview/adoption of collection formulas.
@@ -37,7 +49,7 @@ project-root/
 - **src/pages/planning/OperatingRules.tsx**: Native operating configuration, real missing bank/classification inputs and links to manual commitments, daily forecasts and reports; does not require CAJA.
 - **tests/caja-migration.test.ts**, **tests/helpers/caja-migration.ts**: Anonymous CAJA-to-ERP fixtures and installed-version upgrade, binding/link, policy, deletion, reimport and daily comparison acceptance checks.
 - **tests/browser/caja-migration.spec.ts**: Production-build acceptance for reviewing ambiguous matches, applying formula policy and comparing daily results on desktop/mobile.
-- **src/import-engine/erp-profile.ts**: Versioned raw ERP report headers and sheet detection.
+- **src/import-engine/erp-profile.ts**: Versioned raw ERP headers and report detection by complete schema, independently of physical worksheet names.
 - **src/import-engine/erp.ts**: ERP cells, openings, movements, invoices and investment ledger validation; preserves original coordinates and repeated lines. Business planning is separate from this reader.
 - **tests/helpers/erp-workbook.ts**: Anonymous raw ERP workbook fixtures. `erp-import.test.ts` checks parsing and `erp-database.test.ts` checks atomic persistence and preserved manual work against PostgreSQL.
 - **src/pages/importations/ErpImportContext.tsx**: Declared company, local currency, cutoff and separate bank/investment reporting periods for raw ERP imports.

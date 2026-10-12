@@ -52,7 +52,7 @@ export function CashFlowBento({
   const delta =
     available !== 0 ? ((projected - available) / Math.abs(available)) * 100 : null;
   const incomeShare =
-    collections + payments > 0 ? collections / (collections + payments) : 0.5;
+    collections + payments > 0 ? collections / (collections + payments) : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3 lg:gap-5">
@@ -105,7 +105,7 @@ export function CashFlowBento({
         icon={ArrowLeftRight}
         title="Entradas y salidas"
         subtitle={`Previstas en los próximos ${horizon} días`}
-        netText={formatAmount(Math.abs(variation))}
+        netText={formatAmount(variation)}
         netPositive={variation >= 0}
         incomeShare={incomeShare}
         rows={[
@@ -113,14 +113,14 @@ export function CashFlowBento({
             key: "collections",
             tone: "success",
             icon: ArrowDownLeft,
-            label: "Ingresos",
+            label: "Ingresos previstos",
             amount: formatAmount(collections),
           },
           {
             key: "payments",
             tone: "danger",
             icon: ArrowUpRight,
-            label: "Egresos",
+            label: "Egresos previstos",
             amount: formatAmount(payments),
           },
         ]}

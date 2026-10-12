@@ -6,6 +6,7 @@ import {
   type TreasuryRow,
 } from "./base-treasury";
 import type { DailyProjection } from "./calculations";
+import { bankActivity } from "./bank-activity";
 
 export const PROJECTION_DEFAULTS = { horizon: 30, currency: "CLP", bank: "" };
 export type ProjectionFilters = typeof PROJECTION_DEFAULTS;
@@ -78,6 +79,8 @@ export function snapshotProjection(
   const closing = daily[daily.length - 1];
   return {
     ...model,
+    bankActivity: bankActivity(model.cashRows, snapshot.cutoff),
+    minimumDate: model.minimum === model.available ? snapshot.cutoff : model.days.find(d => d.balance === model.minimum)!.date,
     daily,
     closing,
     projected: closing.final,

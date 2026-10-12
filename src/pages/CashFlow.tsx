@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useSavedFilters } from "@/hooks/use-saved-filters";
 import { useAsyncData } from "@/hooks/use-async";
 import { useProjectionView } from "@/hooks/use-projection-view";
+import { BankActivity } from "@/components/treasury/BankActivity";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
@@ -138,6 +139,7 @@ export default function CashFlow() {
           className="rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning"
         >
           {data.warning}
+          <Link to="/planning" className="mt-2 block underline">Revisar plan de cobros y pagos</Link>
         </p>
       )}
       {model.issues.map((issue) => (
@@ -149,6 +151,7 @@ export default function CashFlow() {
           {issue}
         </p>
       ))}
+      <BankActivity key={[data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
       <CashFlowBento
         cutoff={data.cutoff}
         to={model.to}

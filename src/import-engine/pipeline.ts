@@ -9,6 +9,7 @@ import { resolveBaseCutoff } from "./cutoff";
 import { erpSheetNames, ERP_PROFILE } from "./erp-profile";
 import { readErp } from "./erp";
 import { nextDate } from "@/financial-engine/base-treasury";
+import { bankControls } from "@/financial-engine/bank-control";
 
 export interface WorkSheetData {
   reading?: BaseReadingSummary;
@@ -39,8 +40,11 @@ export async function parseWorkbook(buffer: ArrayBuffer, baseOnly = true): Promi
     throw new Error("El contenido no corresponde a un libro Excel válido. Abre el archivo en Excel y guárdalo como .xlsx.");
   const metadata = XLSX.read(buffer, { type: "array", bookSheets: true });
   const hasBase = metadata.SheetNames.some(n => n.trim().toUpperCase() === "BASE");
-  const erpNames = baseOnly && !hasBase ? erpSheetNames(metadata.SheetNames) : null;
-  const baseName = baseOnly && !erpNames ? findBaseSheet(metadata.SheetNames) : null;
+  const baseName = baseOnly && hasBase ? findBaseSheet(metadata.SheetNames) : null;
+  const erpNames = baseOnly && !hasBase ? erpSheetNames(XLSX.read(buffer, {
+    type: "array", sheetRows: 50, dense: false, cellDates: false,
+    bookVBA: false, cellFormula: false, sheetStubs: false, cellStyles: false,
+  })) : null;
   const wb = XLSX.read(buffer, {
     ...(baseName ? { sheets: [baseName] } : erpNames ? { sheets: [...erpNames.values()] } : {}),
     type: "array", dense: false, cellDates: false, bookVBA: false,
@@ -102,7 +106,7 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
         });
         if (isErp && reading) {
           if (!record.normalized.currency) record.normalized.currency = reading.localCurrency;
-          Object.assign(record.normalized, { company: reading.company, periodStart: reading.periodStart, localCurrency: reading.localCurrency, coverageSheets: ["BANCOS", "CLIENTES", "COLOCACIONES"] });
+          Object.assign(record.normalized, { company: reading.company, periodStart: reading.periodStart, localCurrency: reading.localCurrency, coverageSheets: ["BANCOS", "CLIENTES", "COLOCACIONES", ...(sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS") ? ["SALDOS BANCOS"] : [])] });
           if (String(record.normalized.recordRole).endsWith("_opening") && reading.periodStart && !reading.cutoffIssue)
             record.normalized.date = nextDate(reading.periodStart, -1);
           const date = record.normalized.date;
@@ -168,6 +172,11 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
       records.push({ sheet: sheet.name, row: rowNumbers[i], status, entityType, normalized: n, raw,
         warnings: status === "DUPLICATE" ? "Fila idéntica a otra del archivo." : issues.map((x) => x.message).join(" · "), dedupeKey });
       if (records.length > MAX_IMPORT_ROWS) throw new Error(`El libro supera ${MAX_IMPORT_ROWS.toLocaleString("es-CL")} filas. Divídelo en archivos más pequeños.`);
+    }
+  }
+  for (const control of bankControls(records)) if (control.issues.length) {
+    for (const record of records.filter(r => r.normalized.sourceOrigin === "BANCO" && r.normalized.ledgerCode === control.ledger && r.normalized.currency === control.currency)) {
+      record.status = "ERROR"; record.warnings = [...new Set([record.warnings, ...control.issues].filter(Boolean))].join(" · ");
     }
   }
   return { fileName: "", sheets: sheetResults, total: records.length,

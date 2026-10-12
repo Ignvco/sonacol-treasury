@@ -1,4 +1,5 @@
-/** Treasury calculations use BASE's signed REAL values and native currencies. */
+import { erpBankSigned, isErpBank } from "./bank-control";
+/** Treasury calculations preserve signed ERP/BASE amounts and native currencies. */
 export interface TreasuryRow {
   id: string; kind: "cash_flow" | "invoice" | "investment" | "projection";
   inLatest?: boolean;
@@ -11,6 +12,9 @@ export interface TreasuryRow {
 export interface ForecastLink { id: string; projection_id: string; target_kind: string; target_id: string; }
 export interface ForecastEvent extends TreasuryRow { effectiveDate: string; overdue: boolean; signed: number; replaces?: string; }
 export const total = (values: number[]) => values.reduce((sum, n) => sum + Math.round(n * 100), 0) / 100;
+/** Original commitment remains editable/auditable; only its unpaid part is forecast. */
+export const pendingProjectionAmount = (amount: number, executedAmount = 0) =>
+  Math.max(0, total([amount, -executedAmount]));
 export const isTreasuryDate = (date: string) => {
  const parsed = new Date(date+"T12:00:00Z");
  return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10)===date;
@@ -24,7 +28,7 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
   if (!isTreasuryDate(cutoff) || (!Number.isInteger(horizon) || horizon < 1 || horizon > 366)) throw new Error("Fecha u horizonte inválidos.");
   const rows = [...new Map(input.map(r => [sourceKey(r), r])).values()];
   const matches = (r: TreasuryRow) => (currency === "BASE" || r.currency === currency) && (!bank || r.bank === bank);
-  const sign = (r: TreasuryRow) => r.type === "expense" ? -r.amount : r.amount;
+  const sign = (r: TreasuryRow) => r.normalized && isErpBank(r.normalized) ? erpBankSigned(r.normalized) : r.type === "expense" ? -r.amount : r.amount;
   const cashRows = rows.filter(r => r.inLatest !== false && r.kind === "cash_flow" && r.origin === "BANCO" && r.date <= cutoff && matches(r));
   const allFuture = rows.filter(r => r.inLatest !== false && r.normalized?.isPosition !== true && (r.kind !== "cash_flow" || r.origin === "PLATAFORMA") && !["pagado","conciliado","rescatada","cancelado","borrador"].includes(r.status));
   const byKey = new Map(rows.map(r => [sourceKey(r), r]));
@@ -44,10 +48,16 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
       suppressed.add(targetKey); replacement.set(projectionKey, targetKey);
     }
   }
-  const events: ForecastEvent[] = allFuture.filter(r => !suppressed.has(sourceKey(r))).map(r => ({
-    ...r, effectiveDate: r.plannedDate <= cutoff ? nextDate(cutoff, 1) : r.plannedDate,
-    overdue: r.plannedDate <= cutoff, signed: sign(r) + r.interest, replaces: replacement.get(sourceKey(r)),
-  })).filter(r => matches(r) && r.effectiveDate <= nextDate(cutoff, horizon)).sort((a,b) => a.effectiveDate.localeCompare(b.effectiveDate));
+  const events: ForecastEvent[] = allFuture.filter(r => !suppressed.has(sourceKey(r))).map(r => {
+    const executed = r.kind === "projection" ? Number(r.normalized?.executedAmount ?? 0) : 0;
+    if (!Number.isFinite(executed) || executed < 0 || total([executed, -r.amount]) > 0)
+      throw new Error(`La ejecución registrada supera o invalida el importe de ${r.description}. Revisa el compromiso o el supuesto del escenario.`);
+    const remaining = r.kind === "projection" ? pendingProjectionAmount(r.amount, executed) : r.amount;
+    return {
+      ...r, amount: remaining, effectiveDate: r.plannedDate <= cutoff ? nextDate(cutoff, 1) : r.plannedDate,
+      overdue: r.plannedDate <= cutoff, signed: sign({ ...r, amount: remaining }) + r.interest, replaces: replacement.get(sourceKey(r)),
+    };
+  }).filter(r => !(r.kind === "projection" && r.amount === 0 && Number(r.normalized?.executedAmount ?? 0) > 0) && matches(r) && r.effectiveDate <= nextDate(cutoff, horizon)).sort((a,b) => a.effectiveDate.localeCompare(b.effectiveDate));
   const available = total(cashRows.map(sign));
   const days = Array.from({length:horizon}, (_,i) => {
     const date = nextDate(cutoff,i+1), movements = events.filter(r => r.effectiveDate === date);

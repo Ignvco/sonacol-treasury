@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TreasuryRow, ForecastLink } from "./base-treasury";
+import { erpBankSigned, isErpBank } from "./bank-control";
 export interface RawRow {
   id: string;
   kind: TreasuryRow["kind"];
@@ -41,14 +42,15 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
   return [...data.rows, ...data.manual].map((r) => {
     const n = r.normalized,
       date = n.date ?? n.issueDate ?? n.startDate ?? "";
+    const bankSigned = isErpBank(n) ? erpBankSigned(n) : null;
     return {
       id: r.id,
       kind: r.kind,
       inLatest: true,
       origin: n.sourceOrigin,
-      amount: Number(n.amount),
+      amount: bankSigned === null ? Number(n.amount) : Math.abs(bankSigned),
       currency: n.currency,
-      type: n.type ?? "income",
+      type: bankSigned === null ? n.type ?? "income" : bankSigned < 0 ? "expense" : "income",
       status:
         n.status ??
         (r.kind === "invoice"

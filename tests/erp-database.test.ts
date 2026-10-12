@@ -1,8 +1,9 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import type { PGlite } from "@electric-sql/pglite";
 import { decisionDb, query, upload, row, hash, session, reader } from "./helpers/decision-db";
-import { erpContext, erpWithoutInvestmentOpening, workbookBytes } from "./helpers/erp-workbook";
+import { erpContext, erpWithoutInvestmentOpening, renamedErpWorkbook, workbookBytes } from "./helpers/erp-workbook";
 import { snapshotRows, type RawSnapshot } from "../src/financial-engine/snapshot";
 import { baseTreasury } from "../src/financial-engine/base-treasury";
 import { parseWorkbook, processWorkbook } from "../src/import-engine/pipeline";
@@ -14,6 +15,42 @@ async function commit(name: string, input = records) {
   const preview = await query(db, "select compare_erp_import($1::jsonb) s", [JSON.stringify(input.map(({ raw: _raw, ...r }) => r))]);
   return query(db, "select import_erp_daily($1,$2,$3::jsonb,$4) s", [name, hash(name), JSON.stringify(input), preview.revision]);
 }
+
+test("installed ERP accepts renamed daily reports after upgrade, preserving adjustments, manual work, history and idempotence", async () => {
+ const isolated = await decisionDb("20260926050000000");
+ try {
+  const save = async (input: ProcessedRecord[]) => {
+   const p = await query(isolated, "select compare_erp_import($1::jsonb) s", [JSON.stringify(input)]);
+   return query(isolated, "select import_erp_daily('ERP.xlsm',$1,$2::jsonb,$3) s", [hash(JSON.stringify(input)), JSON.stringify(input), p.revision]);
+  };
+  const first = await save(records);
+  const old: RawSnapshot = await query(isolated, "select get_daily_base_snapshot($1) s", [first.id]);
+  const invoice = old.rows.find(r => r.kind === "invoice")!;
+  await query(isolated, "select treasury_save_business($1,null,null,'adjustment',$2,$3::jsonb,false) s", [first.id, invoice.normalized.businessKey, JSON.stringify({ date: "2026-09-28" })]);
+  await query(isolated, "select treasury_save_manual($1,null,null,$2::jsonb,'{}'::jsonb) s", [first.id, JSON.stringify({ date: "2026-09-26", amount: 90, currency: "CLP", type: "expense", category: "payroll", status: "proyectado", description: "Compromiso conservado" })]);
+  const renamed = processWorkbook(await parseWorkbook(workbookBytes(renamedErpWorkbook(), "xlsm")), undefined, erpContext).records;
+  await assert.rejects(save(renamed), /Fila ERP inválida/);
+  await isolated.exec("reset role");
+  await isolated.exec(await readFile("supabase/migrations/20260926050000000_erp_report_sheet_names.sql", "utf8")); await session(isolated);
+  assert.equal((await save(renamed)).id, first.id); // A change of tab labels alone is not a new financial snapshot.
+  renamed.forEach(r => { r.normalized.cutoffDate = "2026-09-11"; });
+  const next = await save(renamed), snap: RawSnapshot = await query(isolated, "select get_daily_base_snapshot($1) s", [next.id]);
+  assert.notEqual(next.id, first.id);
+  assert.equal(snap.rows.find(r => r.kind === "invoice")!.normalized.adjustedDate, "2026-09-28");
+  assert.equal(snap.manual.length, 1);
+  assert.equal(baseTreasury(snapshotRows(snap), snap.links, snap.batch!.cutoff, 30, "CLP").available, 1300);
+  assert.equal(snap.rows.find(r => r.kind === "invoice")!.normalized.sourceSheet, "Cuentas por cobrar");
+  assert.deepEqual((await query(isolated, "select get_daily_base_snapshot($1) s", [first.id])).rows.map((r: { recordId: string }) => r.recordId), old.rows.map(r => r.recordId));
+  assert.equal((await save(renamed)).id, next.id);
+  const invalid = structuredClone(renamed); invalid[0].normalized.sourceOrigin = "CLIENTES";
+  await assert.rejects(save(invalid), /reporte|moneda ERP inválidos/);
+  const mixed = structuredClone(renamed); mixed[0].sheet = "Otra hoja"; mixed[0].normalized.sourceSheet = "Otra hoja";
+  await assert.rejects(save(mixed), /única hoja/);
+  const wrongCoordinate = structuredClone(renamed); wrongCoordinate[0].normalized.sourceSheet = "Otra hoja";
+  await assert.rejects(save(wrongCoordinate), /Fila ERP inválida/);
+  await session(isolated, reader); await assert.rejects(save(renamed), /pendiente|rol/);
+ } finally { await isolated.close(); }
+});
 test("ERP SQL accepts repeated row numbers across sheets, carries every MANUAL and keeps historical snapshots", async () => {
   const legacy = await upload(db, "old-caja", [row("BANCO", 9, { cutoffDate: "2026-09-01", date: "2026-09-01" }), row("MANUAL", 10, { cutoffDate: "2026-09-01", date: "2026-09-25" })]);
   const saved = await commit("erp-raw"); assert.equal(saved.imported_records, 8);
@@ -51,7 +88,12 @@ test("CAJA transition carries verified invoice dates and retains uncertain invoi
   assert.equal(snap.rows.find((r: { kind: string }) => r.kind === "invoice").normalized.adjustedDate, "2026-09-25");
   assert.equal(snap.business.length, 3);
   assert.equal(snap.business.filter((d: { target_key: string }) => d.target_key.startsWith("legacy:")).length, 2);
-  assert.equal(snap.businessIssues.length, 2);
+  // Two unresolved CAJA decisions plus the missing expense-plan coverage notice.
+  const issues: string[] = snap.businessIssues;
+  assert.equal(issues.length, 3);
+  assert.equal(issues.filter(message => message.startsWith("Ajuste sin registro en la cobertura actual: ")).length, 1);
+  assert.equal(issues.filter(message => message.startsWith("Rescate ") && message.endsWith("La cuenta receptora ya no está en la cobertura o cambió de moneda.")).length, 1);
+  assert.ok(issues.includes("No hay compromisos de egreso incorporados en esta versión. Revisa el plan inicial en Planificación; los abonos históricos no generan pagos futuros."));
   assert.equal(snap.manual[0].normalized.amount, 5000);
   assert.equal(snap.manual[0].normalized.status, "borrador");
  } finally { await isolated.close(); }

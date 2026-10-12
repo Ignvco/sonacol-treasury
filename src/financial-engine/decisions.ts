@@ -67,6 +67,8 @@ export function scenarioRows(
       throw new Error("Supuesto duplicado o movimiento futuro inexistente.");
     if (a.amount !== undefined && (!Number.isFinite(a.amount) || a.amount <= 0))
       throw new Error("El importe debe ser positivo.");
+    if (a.amount !== undefined && total([a.amount, -Number(target.normalized?.executedAmount ?? 0)]) < 0)
+      throw new Error("El supuesto no puede reducir el compromiso por debajo de su ejecución registrada.");
     if (a.date !== undefined && !isTreasuryDate(a.date))
       throw new Error("Fecha de supuesto inválida.");
     map.set(a.key, a);

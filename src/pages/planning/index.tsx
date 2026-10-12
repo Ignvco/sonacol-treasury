@@ -12,6 +12,7 @@ import type { BusinessDecision, RawRow } from "@/financial-engine/snapshot";
 import { DecisionDialog } from "./DecisionDialog";
 import { CollectionPolicyDialog } from "./CollectionPolicyDialog";
 import { OperatingRules } from "./OperatingRules";
+import { InitialPlan } from "./InitialPlan";
 
 const labels = { adjustment: "Ajuste", redemption: "Rescate", rule: "Regla" };
 const rescueStates = { planned: "Programado", executed: "Ejecutado", cancelled: "Cancelado" };
@@ -32,6 +33,7 @@ export default function Planning() {
     <PageHeader title="Planificación y reglas" subtitle="Tus decisiones sobre los datos ERP · corte seleccionado" actions={<Link className="t-button-secondary" to="/projections">Movimientos manuales</Link>} />
     {!enabled ? <section className="rounded-xl border p-5 text-sm">Esta fecha utiliza el formato CAJA. Sus datos manuales están disponibles en Proyecciones. Al importar ERP podrás mantener aquí las fechas previstas, clasificaciones y rescates.</section> : <>
       <OperatingRules snapshot={snapshot} canWrite={canWrite} />
+      {snapshot.rows.some(r => r.normalized.company === "SONACOL") && <InitialPlan key={snapshot.batch.id} batch={snapshot.batch.id} canWrite={canWrite} />}
       {!!snapshot.businessIssues?.length && <section role="alert" className="rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm"><p className="font-semibold">Decisiones que requieren revisión</p><ul className="mt-2 list-disc pl-5">{snapshot.businessIssues.map((issue, i) => <li key={i}>{issue}</li>)}</ul></section>}
       <div className="flex flex-wrap gap-2">{canWrite && <><button className="t-button-primary" onClick={() => setPolicyOpen(true)}>Configurar cobranzas</button>{(Object.keys(labels) as BusinessDecision["kind"][]).map(kind => <button className="t-button-secondary" key={kind} onClick={() => setEdit({ kind })}>Crear {labels[kind].toLowerCase()}</button>)}</>}</div>
       {!!pending.length && <SectionCard title={`Decisiones por revisar (${pending.length})`} subtitle="El registro asociado no está en la cobertura actual. Revisa su destino sin deducir pago o ejecución por su ausencia.">

@@ -115,8 +115,8 @@ export function ImportPreview({
         subtitle={preview.fileName}
       >
         {isErp && <ErpImportContext initial={applied.ERP} busy={busy}
-          firstBankDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "BANCOS")?.reading?.firstMovementDate}
-          firstInvestmentDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "COLOCACIONES")?.reading?.firstMovementDate}
+          firstBankDate={preview.sheets.find(s => s.reading?.erpReport === "BANCOS")?.reading?.firstMovementDate}
+          firstInvestmentDate={preview.sheets.find(s => s.reading?.erpReport === "COLOCACIONES")?.reading?.firstMovementDate}
           onDirty={() => { setContextDirty(true); setReviewed(false); }} onApply={ERP => onAnalyze({ ...applied, ERP })} />}
         {isErp && cutoffIssue && <p role="alert" className="mb-4 text-sm text-danger">{cutoffIssue}</p>}
         {reading && !isErp && <ImportCutoff reading={reading} value={cutoffDate} issue={cutoffIssue} busy={busy}
@@ -140,7 +140,7 @@ export function ImportPreview({
           ))}
         </div>
         <p className="mb-4 rounded-xl bg-brand-soft p-4 text-sm">
-          {isErp ? "Se leen los datos crudos de BANCOS, CLIENTES y COLOCACIONES. La plataforma conserva tus movimientos manuales, reglas y ajustes y genera las proyecciones. Los saldos de apertura no se consideran ingresos del período." : "Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los datos completos de esta fecha. MANUAL conserva tus ediciones; selecciona únicamente las que quieras reemplazar con el Excel."}
+          {isErp ? "Se leen los datos crudos de BANCOS, CLIENTES y COLOCACIONES. SALDOS BANCOS aporta las aperturas por cuenta cuando está presente. Cargo suma; Abono resta. La plataforma conserva tus movimientos manuales, reglas y ajustes y genera las proyecciones. Los saldos de apertura no se consideran ingresos del período." : "Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los datos completos de esta fecha. MANUAL conserva tus ediciones; selecciona únicamente las que quieras reemplazar con el Excel."}
         </p>
         {preview.sheets
           .filter((sheet) => sheet.reading)

@@ -150,6 +150,7 @@ export interface Payment {
 
 export interface Projection {
   id: string;
+  executedAmount?: number;
   batchId?: string;
   revision?: number;
   edited?: boolean;

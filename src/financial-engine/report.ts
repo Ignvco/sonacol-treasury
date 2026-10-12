@@ -1,5 +1,6 @@
 import { decisionModel, type DecisionContext } from "./decisions";
 import type { TreasuryRow, ForecastLink } from "./base-treasury";
+import { bankControls } from "./bank-control";
 export function executiveReport(
   rows: TreasuryRow[],
   links: ForecastLink[],
@@ -7,6 +8,7 @@ export function executiveReport(
   source: { id: string; fileName: string; revision: string },
 ) {
   const model = decisionModel(rows, links, context);
+  const controls = bankControls(model.cashRows.map(r => ({ normalized: r.normalized ?? {}, row: r.row })));
   const summary = [
     {
       Métrica: "Caja disponible",
@@ -19,7 +21,7 @@ export function executiveReport(
       Moneda: context.currency,
     },
     {
-      Métrica: "Saldo mínimo previsto",
+      Métrica: "Saldo mínimo desde el corte",
       Valor: model.minimum,
       Moneda: context.currency,
     },
@@ -53,6 +55,7 @@ export function executiveReport(
       (r.kind === "cash_flow" ? 0 : r.interest),
     Moneda: r.currency,
     Archivo: r.fileName,
+    Hoja: String(r.normalized?.sourceSheet ?? "BASE"),
     Fila: r.row ?? "",
     Identificador: r.recordId ?? r.id,
   }));
@@ -65,6 +68,7 @@ export function executiveReport(
     sections: [
       { title: "Resumen", rows: summary },
       { title: "Flujo diario", rows: daily },
+      ...(controls.length ? [{ title: "Control bancario", rows: controls.map(c => ({ Banco: c.bank, Cuenta: c.ledger, Moneda: c.currency, Desde: c.periodStart, Corte: c.cutoff, SaldoInicial: c.opening, Cargos: c.income, Abonos: c.expense, SaldoCalculado: c.calculated, SaldoInformado: c.reported ?? "No informado", Diferencia: c.difference ?? "No comprobable", Observaciones: c.issues.join(" · ") || (c.reported === null ? "Pendiente de saldo final informado" : "Coincide") })) }] : []),
       { title: "Trazabilidad", rows: provenance },
     ],
     warnings: model.issues,

@@ -18,6 +18,7 @@ export interface ResumenBentoProps {
   projected: number;
   invested: number;
   minimum: number;
+  minimumDate: string;
   collections: number;
   payments: number;
   daily: { date: string; final: number }[];
@@ -45,6 +46,7 @@ export function ResumenBento({
   projected,
   invested,
   minimum,
+  minimumDate,
   collections,
   payments,
   daily,
@@ -56,7 +58,8 @@ export function ResumenBento({
   onOpenPayments,
   onOpenDay,
 }: ResumenBentoProps) {
-  const minimumDay = days.find((day) => day.balance === minimum)?.date ?? to;
+  const minimumDay = minimumDate;
+  const openMinimum = () => minimumDay === cutoff ? onOpenCash() : onOpenDay(minimumDay);
   const heaviest = days.reduce<{ date: string; expense: number } | null>(
     (worst, day) =>
       day.expense > 0 && (!worst || day.expense > worst.expense)
@@ -72,16 +75,16 @@ export function ResumenBento({
   const net = collections - payments;
   const balances = daily.map((day) => day.final);
   const incomeShare =
-    collections + payments > 0 ? collections / (collections + payments) : 0.5;
+    collections + payments > 0 ? collections / (collections + payments) : null;
 
   const middle: RawMilestone[] = [
-    ...(heaviest && heaviest.date !== minimumDay
+    ...(heaviest
       ? [
           {
             key: "heaviest",
             raw: heaviest.date,
             title: "Mayor egreso",
-            description: "pago más alto del horizonte",
+            description: "total de pagos más alto del horizonte",
             amountText: "-" + formatAmount(heaviest.expense),
             tone: "danger" as const,
             onClick: () => onOpenDay(heaviest.date),
@@ -91,10 +94,10 @@ export function ResumenBento({
     {
       key: "minimum",
       raw: minimumDay,
-      title: "Mínimo proyectado",
-      description: "punto más bajo del horizonte",
+      title: "Mínimo desde el corte",
+      description: minimumDay === cutoff ? "saldo al inicio de la proyección" : "saldo más bajo del horizonte",
       amountText: formatAmount(minimum),
-      onClick: () => onOpenDay(minimumDay),
+      onClick: openMinimum,
     },
   ].sort((a, b) => a.raw.localeCompare(b.raw));
 
@@ -137,10 +140,10 @@ export function ResumenBento({
         footerLeft={
           <button
             type="button"
-            onClick={() => onOpenDay(minimumDay)}
+            onClick={openMinimum}
             className="rounded-lg text-[12px] font-medium text-white/70 underline decoration-white/30 underline-offset-4 transition-colors hover:text-white"
           >
-            Mínimo del horizonte: {formatAmount(minimum)}
+            Mínimo desde el corte: {formatAmount(minimum)}
           </button>
         }
         footerRight={
@@ -158,7 +161,7 @@ export function ResumenBento({
         icon={ArrowLeftRight}
         title="Flujo del horizonte"
         subtitle="Ingresos y egresos previstos"
-        netText={formatAmount(Math.abs(net))}
+        netText={formatAmount(net)}
         netPositive={net >= 0}
         incomeShare={incomeShare}
         rows={[
@@ -201,7 +204,7 @@ export function ResumenBento({
         liquidity={liquidity}
         onOpenCash={onOpenCash}
         onOpenInvested={onOpenInvested}
-        onOpenMinimumDay={() => onOpenDay(minimumDay)}
+        onOpenMinimumDay={openMinimum}
       />
 
       <ResumenMilestonesCard
