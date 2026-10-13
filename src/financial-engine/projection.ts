@@ -55,7 +55,7 @@ export function projectionFilters(value: ProjectionFilters): ProjectionFilters {
 
 /** Both operational views consume this exact daily series and its closing row. */
 export function snapshotProjection(
-  snapshot: { rows: TreasuryRow[]; links: ForecastLink[]; cutoff: string; engineVersion?: string },
+  snapshot: { rows: TreasuryRow[]; links: ForecastLink[]; cutoff: string; engineVersion?: string; businessIssues?: string[] },
   preferences: ProjectionFilters = PROJECTION_DEFAULTS,
 ) {
   const filters = projectionFilters(preferences);
@@ -79,6 +79,7 @@ export function snapshotProjection(
   const closing = daily[daily.length - 1];
   return {
     ...model,
+    auditIssues: [...(snapshot.businessIssues ?? []), ...model.issues],
     bankActivity: bankActivity(model.cashRows, snapshot.cutoff),
     minimumDate: model.minimum === model.available ? snapshot.cutoff : model.days.find(d => d.balance === model.minimum)!.date,
     minimumIsCash: model.minimum === model.available,

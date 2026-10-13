@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CashEquivalence } from "./CashEquivalence";
 import type { SnapshotProjection } from "@/financial-engine/projection";
 import { isPlannedPlacement, type TreasuryRow } from "@/financial-engine/base-treasury";
 import { formatDateMedium } from "@/financial-engine/format";
@@ -55,6 +56,7 @@ export function CashPosition({ model, formatAmount }: {
       onClick={() => setDetail({ title: "Pendientes sin cuenta única en la cobertura", rows: position.unassigned })}>
       Revisar {position.unassigned.length} pendientes incluidos en el total, sin asignación a una cuenta de esta tabla.
     </button>}
+    <CashEquivalence model={model} />
     {detail && <SourceBreakdown key={detail.title} {...detail} onClose={() => setDetail(null)} />}
   </SectionCard>;
 }

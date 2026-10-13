@@ -1407,6 +1407,8 @@ Pendiente de verificación en ejecución: instalación sobre la base vigente, ad
 
 ## 35. Patch 3: revisión preventiva de actualización ERP
 
+> El patch 4 agrega comparación opcional de cierre y corrige falsos positivos de la comparación histórica; véase sección 36.
+
 Requiere ambos SQL del patch 2 y agrega `20261013000000000_erp_refresh_review.sql`. Instalar la migración antes de desplegar el frontend. No modifica filas existentes, cálculos de Cargo/Abono ni el mecanismo de arrastre; envuelve las RPC actuales y mantiene sus controles de permisos, versión y transacción.
 
 La comparación de una carga vigente incorpora `refreshReview`: cuentas/monedas ausentes, asignaciones verificadas y evidencia que requiere revisión. Se suman conjuntamente ejecuciones de compromisos y rescates, incluso cancelados no eliminados. La revisión se repite en el servidor bajo el bloqueo de importación, sin confiar en el botón del navegador.
@@ -1421,3 +1423,21 @@ La comparación de una carga vigente incorpora `refreshReview`: cuentas/monedas 
 Para un bloqueo, corregir primero una exportación incompleta o revisar la asignación en la versión vigente mediante su diálogo de ejecución. Retirar evidencia únicamente si es incorrecta y volver a analizar ERP. No existe reasignación automática ni una excepción para ignorar el bloqueo. Una corrección bancaria legítima puede exigir revisión explícita de la asignación anterior y vinculación posterior al movimiento corregido.
 
 Sin pruebas, lint, compilación ni migraciones ejecutadas por solicitud del usuario. Pendiente validar en una base de ensayo: reimportación idéntica, cambio de corte/apertura, movimiento corregido o ausente, duplicados, combinación manual/rescate, conflictos concurrentes, cobertura por moneda y carga histórica. Este patch no incorpora un asistente de remapeo ni certifica el cierre de la migración o equivalencia con CAJA; requiere ERP del mismo corte para esa comprobación.
+
+## 36. Patch 4: control de equivalencia del cierre
+
+Incremental sobre `9c20d45` (patches 1–3 publicados). No requiere nuevas migraciones, cambios de dependencias ni importación diaria de CAJA.
+
+Resumen y Flujo de caja incluyen «Comparar cierre con una referencia» dentro de Posición de caja. Ingresa documento/hoja/celdas, fecha y seis totales independientes del cierre de referencia: saldo bancario real, ingresos pendientes, pagos pendientes sin colocaciones, caja antes de colocar, colocaciones pendientes y liquidez final. Las cifras no se precargan desde los cálculos de la app ni desde un Excel de otro corte. Cada campo acepta número sin separadores de miles y hasta dos decimales; vacío no equivale a cero.
+
+La revisión exige corte idéntico, una moneda específica y confirmación del mismo alcance de cuentas y pendientes. Valida ambas ecuaciones de la referencia y contrasta el saldo ERP mostrado contra el control bancario por cuenta (apertura + cargos − abonos). Un saldo final no informado por ERP permanece desconocido y no se exige para calcularlo. Incidencias del motor, decisiones de negocio, cargas parciales y cuentas pendientes de asignación impiden indicar coincidencia sin observaciones. Las diferencias válidas se muestran aunque existan otras incidencias.
+
+Los valores ingresados son locales al formulario y no se guardan como ajustes ni se reutilizan en otra carga, banco o moneda. La revisión puede exportarse a CSV mediante el permiso de exportación existente; incluye referencia, alcance, archivos de origen, cuentas, ambos valores, diferencias y observaciones. La comparación no modifica saldos ni verifica automáticamente que la referencia digitada sea auténtica/completa.
+
+Se corrige también la comparación histórica CAJA/plataforma: un saldo neto coincidente deja de indicarse como coincidencia si hay movimientos sin correspondencia o diferencias de cuenta/tipo. Esa comparación continúa recalculando ambas cargas con el motor común y no constituye una comprobación independiente de fórmulas Excel.
+
+### Estado de la migración
+
+La operación diaria se mantiene en ERP más decisiones, compromisos, rescates, colocaciones y reglas nativas. CAJA puede servir de referencia de transición, no se añade como requisito diario. No se eliminan cargas históricas ni los mecanismos de consulta anteriores.
+
+Entrega revisada estáticamente, **sin ejecutar pruebas, lint, TypeScript, compilación ni migraciones**. Pendiente comprobar en ejecución: diferencias compensadas, cuenta distinta dentro del mismo banco, campos vacíos/cero/negativos, cortes incompatibles, monedas, permisos CSV, cambios de carga y advertencias. Sigue pendiente la comparación financiera completa por cuenta y movimiento con ERP/CAJA reales del mismo corte; el control de seis totales no certifica por sí solo toda la funcionalidad financiera ni da por cerrada la migración.

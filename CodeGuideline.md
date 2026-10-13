@@ -27,6 +27,9 @@ project-root/
 
 ## Directory Responsibilities
 
+- **src/financial-engine/cash-equivalence.ts**: Optional same-cut, single-currency closure comparison against independently declared reference totals; validates the reference equations and bank control without mutating operational data.
+- **src/components/treasury/CashEquivalence.tsx**: Shared session-only reference form in CashPosition, with explicit scope confirmation, visible differences and authorized CSV export. No database migration or recurring CAJA input.
+
 - **supabase/migrations/20261012010000000_planning_operations.sql**: Evidence-backed partial redemptions, shared bank allocation limits, explicit manual bank accounts and forward preservation of operations.
 - **supabase/migrations/20261012020000000_october_plan_review.sql**: Private October reference catalog and atomic, explicit adoption preserving identities, edits, cancellations and source evidence.
 - **src/services/planReviewService.ts**, **src/pages/planning/PlanReview.tsx**, **src/pages/planning/PlanReviewRows.tsx**: Reviewed transition of commitments, placements, redemptions and collection accounts into native planning; no recurring workbook dependency.

@@ -46,6 +46,8 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
       before.effectiveDate !== after.effectiveDate ? "Fecha prevista" : "",
       total([before.signed, -after.signed]) !== 0 ? "Importe" : "",
       before.bank !== after.bank ? "Banco receptor" : "",
+      (before.settlementLedger || before.ledger) !== (after.settlementLedger || after.ledger) ? "Cuenta receptora" : "",
+      before.type !== after.type ? "Ingreso/egreso" : "",
     ].filter(Boolean);
     if (differences.length) changes.push({ id: key, label: before.customer || before.description, reason: differences.join(" · "), before, after });
   }
@@ -58,5 +60,5 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
   }));
   const openingDelta = total([right.available, -left.available]);
   const maxDifference = Math.max(Math.abs(openingDelta), ...days.map(d => Math.abs(d.delta)));
-  return { blocks, warnings, days, changes, openingDelta, maxDifference, numericallyEqual: maxDifference === 0 && warnings.length === 0 };
+  return { blocks, warnings, days, changes, openingDelta, maxDifference, numericallyEqual: maxDifference === 0 && warnings.length === 0 && changes.length === 0 };
 }
