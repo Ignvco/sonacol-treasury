@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { InvestmentMaturities } from "@/components/treasury/InvestmentMaturities";
+import type { InvestmentMaturity } from "@/financial-engine/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CASHFLOW_CATEGORY_LABEL, type Projection } from "@/financial-engine/types";
 import type { BusinessDecision, RawSnapshot } from "@/financial-engine/snapshot";
@@ -20,6 +22,8 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
   const update = (field: string, value: string | number) => setValues(v => ({ ...v, [field]: value }));
   const targets = snapshot.rows.filter(r => kind === "redemption" ? r.kind === "investment" : initial?.source_json?.kind === "invoice" ? r.kind === "invoice" && r.normalized.currency === initial.source_json.normalized.currency : ["invoice", "cash_flow"].includes(r.kind) && r.normalized.recordRole !== "bank_opening");
   const selected = snapshot.rows.find(r => r.normalized.businessKey === target);
+  const maturityEntries = (selected?.normalized.maturityEntries ?? []) as InvestmentMaturity[];
+  const maturityDates = [...new Set(maturityEntries.filter(e => e.signedAmount > 0 && e.endDate).map(e => e.endDate!))].sort();
   const banks = snapshot.rows.filter(r => r.normalized.recordRole === "bank_opening" && (kind === "redemption" ? r.normalized.currency === values.currency : kind === "adjustment" && selected?.kind === "invoice" ? r.normalized.currency === selected.normalized.currency : true));
   const collectionRule = kind === "rule" && values.ruleType === "collection";
   const bindingChanged = !!initial && kind !== "rule" && target !== initial.target_key;
@@ -40,6 +44,11 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] min-w-0 grid-cols-1 overflow-y-auto break-words sm:max-w-xl">
     <DialogHeader><DialogTitle>{names[kind]}</DialogTitle><DialogDescription>La decisión se guarda por separado y se conserva al actualizar los datos ERP.</DialogDescription></DialogHeader>
     <form className="grid min-w-0 grid-cols-1 gap-4 [&>*]:min-w-0" onSubmit={e => { e.preventDefault(); void save(); }}>
+      {kind === "redemption" && maturityEntries.length > 0 && <div>
+        <InvestmentMaturities entries={maturityEntries} cutoff={snapshot.batch?.cutoff || ""} allowExport={false} />
+        <p className="text-sm">Usar un vencimiento explícito para la fecha del rescate (requiere revisar importe y cuenta receptora):</p>
+        <div className="mt-2 flex flex-wrap gap-2">{maturityDates.map(date => <button type="button" className="t-button-secondary" disabled={busy} key={date} onClick={() => update("date", date)}>{date}</button>)}</div>
+      </div>}
       {kind !== "rule" && <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">{kind === "redemption" ? "Posición de inversión" : "Documento o movimiento"}<select className="t-input w-full min-w-0 max-w-full" required value={target} disabled={busy} onChange={e => { setTarget(e.target.value); const r = snapshot.rows.find(r => r.normalized.businessKey === e.target.value); if (kind === "redemption" && r) update("currency", r.normalized.currency); }}>
         <option value="">Selecciona un registro</option>
         {target && !targets.some(r => r.normalized.businessKey === target) && <option value={target}>Registro anterior fuera de cobertura · reasignar</option>}

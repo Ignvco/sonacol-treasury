@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { cellText, cellToNumber, isErrorCell } from "./detect";
+import { cellText, cellToNumber, cellToDate, isErrorCell } from "./detect";
 import { ERP_HEADERS, ERP_PROFILE, headerKey } from "./erp-profile";
 import { MAX_IMPORT_ROWS, type ProcessedRecord } from "./types";
 import type { WorkSheetData } from "./pipeline";
@@ -22,6 +22,9 @@ export function readErpBankBalances(wb: XLSX.WorkBook, name: string) {
     if (matches.length > 1) throw new Error(`${name}: encabezado duplicado «${label}».`);
     if (matches.length) columns[key] = matches[0][0];
   }
+  const dates = [...rows.get(header)!].filter(([, c]) => ["fecha", "fechadeapertura", "fechadesaldo", "fechadelsaldo"].includes(headerKey(cellText(c))));
+  if (dates.length > 1) throw new Error(`${name}: varias columnas de fecha de apertura. Define una columna inequívoca.`);
+  if (dates.length) columns.openingDate = dates[0][0];
   const records: ProcessedRecord[] = [], accounts = new Map<string, ProcessedRecord>();
   for (const row of ordered.filter(r => r > header)) {
     const cells = rows.get(row)!, get = (key: string) => cells.get(columns[key]), text = (key: string) => cellText(get(key)).trim();
@@ -32,6 +35,8 @@ export function readErpBankBalances(wb: XLSX.WorkBook, name: string) {
     const closingCurrency = text("closing").match(/\b(CLP|USD|UF|UTM)\b/i)?.[1].toUpperCase();
     const currency = openingCurrency ?? closingCurrency ?? "";
     const closing = text("closing") ? cellToNumber(get("closing")) : null;
+    const openingDate = columns.openingDate === undefined ? null : cellToDate({ ...get("openingDate"), date1904: !!wb.Workbook?.WBProps?.date1904 }).iso;
+    if (columns.openingDate !== undefined && !openingDate) errors.push("Fecha de apertura vacía o inválida; no se reemplaza automáticamente.");
     if (!ledger || !bank) errors.push("Cuenta asociada y Banco son obligatorios.");
     if (opening === null || !Number.isSafeInteger(Math.round(opening * 100))) errors.push("Saldo Inicial inválido; una celda vacía no equivale a cero.");
     if (text("closing") && (closing === null || !Number.isSafeInteger(Math.round(closing * 100)))) errors.push("Saldo Final informado inválido.");
@@ -41,7 +46,7 @@ export function readErpBankBalances(wb: XLSX.WorkBook, name: string) {
       if (isErrorCell(cell) || (cell?.f && cell.v == null)) errors.push(`${XLSX.utils.encode_col(col)}${row}: error o fórmula sin resultado (${key}).`);
     }
     const n = { sourceProfile: ERP_PROFILE, sourceOrigin: "BANCO", sourceSheet: name, recordRole: "bank_opening", bankBalanceSource: "SALDOS BANCOS", company: "SONACOL", currency, currencyKnown: true,
-      ledgerCode: ledger, bank, date: null, periodStart: null, reportDate: null, adjustedDate: null, status: "confirmado", entityType: "cash_flow",
+      ledgerCode: ledger, bank, date: null, openingDate, openingDateSource: columns.openingDate === undefined ? "declared_daily_cutoff" : `${name}!${XLSX.utils.encode_col(columns.openingDate)}${row}`, openingBasis: "daily_opening", periodStart: null, reportDate: null, adjustedDate: null, status: "confirmado", entityType: "cash_flow",
       description: "Saldo de apertura · " + bank, category: "other_income", amount: Math.abs(opening ?? 0), signedAmount: opening ?? 0, type: (opening ?? 0) < 0 ? "expense" : "income",
       bankReportedClosing: closing, sourceId: `ERP:BANK-OPENING:${ledger}` };
     const raw = Object.fromEntries([...cells].map(([c, v]) => [`${XLSX.utils.encode_col(c)}${row} · ${cellText(rows.get(header)!.get(c))}`, { value: v.v ?? null, type: v.t, formula: v.f ?? null }]));

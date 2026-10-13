@@ -1,6 +1,7 @@
 import { decisionModel, type DecisionContext } from "./decisions";
 import { total, type TreasuryRow, type ForecastLink } from "./base-treasury";
 import { bankControls } from "./bank-control";
+import type { InvestmentMaturity } from "./types";
 export function executiveReport(
   rows: TreasuryRow[],
   links: ForecastLink[],
@@ -70,13 +71,13 @@ export function executiveReport(
     "Cuenta de origen": r.ledger,
     "Cuenta bancaria": r.kind === "cash_flow" ? r.ledger : r.settlementLedger ?? "",
     "Inicio de período ERP": String(r.normalized?.periodStart ?? ""),
-    Tipo: "effectiveDate" in r ? "Pendiente" : "Registrado",
+    Tipo: r.normalized?.recordRole === "bank_opening" ? "Saldo de apertura; no es ingreso" : "effectiveDate" in r ? "Pendiente" : "Registrado",
     Cargo: r.normalized?.recordRole === "bank_movement" ? Number(r.normalized.debe) : "",
     Abono: r.normalized?.recordRole === "bank_movement" ? Number(r.normalized.haber) : "",
     Capital: r.type === "expense" ? -r.amount : r.amount,
     Interés: r.interest,
     Flujo:
-      "signed" in r ? Number(r.signed) : (r.type === "expense" ? -r.amount : r.amount),
+      r.normalized?.recordRole === "bank_opening" ? "No es movimiento" : "signed" in r ? Number(r.signed) : (r.type === "expense" ? -r.amount : r.amount),
     Moneda: r.currency,
     Archivo: r.fileName,
     Hoja: String(r.normalized?.sourceSheet ?? "BASE"),
@@ -84,6 +85,11 @@ export function executiveReport(
     Identificador: r.recordId ?? r.id,
   }));
   const warnings = [...new Set([...(source.warnings ?? []), ...model.issues, ...controls.flatMap(c => c.issues)])];
+  const maturities = model.investedRows.flatMap(r => ((r.normalized?.maturityEntries ?? []) as InvestmentMaturity[]).map(e => ({
+    Cuenta: e.ledger, Moneda: e.currency, Contabilización: e.operationDate || "No informada", Vencimiento: e.endDate || "No informado",
+    "Importe original con signo": e.signedAmount, Origen: `${e.sourceSheet}!${e.sourceRow}`, Detalle: e.description,
+    Alcance: "Mayor original; no capital remanente por vencimiento ni ingreso automático",
+  })));
   return {
     title: "Informe ejecutivo de tesorería",
     subtitle: `Corte ${context.cutoff} · ${context.horizon} días · ${context.currency}`,
@@ -101,6 +107,7 @@ export function executiveReport(
       })) }] : []),
       ...(controls.length ? [{ title: "Control bancario", rows: controls.map(c => ({ Banco: c.bank, Cuenta: c.ledger, Moneda: c.currency, Desde: c.periodStart, Corte: c.cutoff, SaldoInicial: c.opening, Cargos: c.income, Abonos: c.expense, SaldoCalculado: c.calculated, SaldoInformado: c.reported ?? "No informado", Diferencia: c.difference ?? "No comprobable", Observaciones: c.issues.join(" · ") || (c.reported === null ? "Saldo calculado; referencia final no informada" : "Coincide") })) }] : []),
       { title: "Trazabilidad", rows: provenance },
+      ...(maturities.length ? [{ title: "Vencimientos ERP", rows: maturities }] : []),
       ...(warnings.length ? [{ title: "Observaciones", rows: warnings.map(w => ({ Observación: w })) }] : []),
     ],
     warnings,

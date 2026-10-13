@@ -111,6 +111,17 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
             record.normalized.date = nextDate(reading.periodStart, -1);
           const date = record.normalized.date;
           const issues: string[] = [];
+          const dailyBanks = sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS");
+          if (dailyBanks && record.normalized.sourceOrigin === "BANCO") {
+            if (reading.periodStart !== reading.cutoff) issues.push("SALDOS BANCOS es apertura diaria: el inicio bancario debe coincidir con el corte. No se aplicarán movimientos de otro día.");
+            if (record.normalized.recordRole === "bank_opening") {
+              const openingDate = record.normalized.openingDate ?? reading.cutoff;
+              if (openingDate !== reading.cutoff) issues.push("La fecha de apertura no coincide con el corte. Se requiere una carga independiente para cada día; no se acumulan aperturas.");
+              Object.assign(record.normalized, { date: openingDate, openingDate });
+            }
+            if (record.normalized.recordRole === "bank_movement" && record.normalized.date !== reading.cutoff)
+              issues.push("Movimiento fuera del día de apertura: conserva el histórico en su propia carga y exporta los movimientos de esta jornada.");
+          }
           if (record.normalized.currency !== reading.localCurrency) issues.push("La moneda de la fila no coincide con la moneda local declarada.");
           if (String(record.normalized.recordRole).endsWith("_movement") && date && reading.periodStart && String(date) < reading.periodStart)
             issues.push(`Movimiento del ${date} anterior al inicio ${reading.periodStart}; corrige el inicio del mayor de ${sheet.name}.`);

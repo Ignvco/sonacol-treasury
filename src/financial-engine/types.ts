@@ -124,7 +124,15 @@ export interface CashFlow {
   importRecordId?: string;
 }
 
+export interface InvestmentMaturity {
+  sourceKey: string; sourceRow: number; sourceSheet: string;
+  operationDate: string | null; endDate: string | null; signedAmount: number;
+  currency: string; ledger: string; counterpartLedger: string; description: string;
+  role: string; transaction: string | null;
+}
 export interface Investment {
+  maturityEntries?: InvestmentMaturity[];
+  maturityCutoff?: string;
   id: string;
   bankId: string;
   type: InvestmentType;

@@ -177,6 +177,8 @@ const toCashFlow = (r: any): CashFlow => ({
   importRecordId: r.import_record_id,
 });
 const toInvestment = (r: any): Investment => ({
+  maturityEntries: r.maturity_entries,
+  maturityCutoff: r.maturity_cutoff,
   id: r.id,
   bankId: r.bank_id ?? "",
   type: r.type,
@@ -461,6 +463,8 @@ export const dataService = {
           id: r.id,
           bank_id: r.bank,
           type: n.investmentType ?? "colocacion",
+          maturity_entries: n.maturityEntries,
+          maturity_cutoff: n.maturityCutoff,
           amount: r.amount,
           currency: r.currency,
           start_date: n.startDate ?? r.date,

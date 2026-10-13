@@ -39,7 +39,13 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       if (matches.length !== 1) throw new Error(`${name}: encabezado duplicado «${label}».`);
       columns[key] = matches[0][0];
     }
+    if (kind === "COLOCACIONES") {
+      const matches = [...rows.get(header)!].filter(([, c]) => headerKey(text(c)) === "fechadevencimiento");
+      if (matches.length > 1) throw new Error(`${name}: Fecha de Vencimiento duplicada.`);
+      if (matches.length) columns.endDate = matches[0][0];
+    }
     const records: ProcessedRecord[] = [];
+    const uncoveredBankLabels = new Set<string>();
     let bankLedger = "", bank = "", bankCurrency = "", skipped = 0;
     const bankGroups = new Set<string>();
     const balances = new Map<string, number>();
@@ -74,14 +80,18 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       let signed = 0;
       if (kind === "BANCOS") {
         if (bankBalances) {
-          const legacyOpening = value("date").toUpperCase() === "ACTIVOS";
-          const account = bankBalances.accounts.get(value(legacyOpening ? "dueDate" : "ledger"));
-          if (legacyOpening) {
-            const amount = number("debit", true) - number("credit", true);
-            if (!account || account.status === "ERROR" || errors.length || Math.abs(Number(account.normalized.signedAmount) - amount) > 0.005)
-              throw new Error(`${name}!${row}: la apertura de ${value("dueDate")} no coincide con SALDOS BANCOS. Revisa ambas fuentes; no se sumarán dos aperturas.`);
+          // Group labels carry the account in the date column, sometimes without
+          // the word Activos. Empty money cells are not a zero opening.
+          const groupLabel = (value("date").toUpperCase() === "ACTIVOS" || !value("date"))
+            && /^\d{6,}$/.test(value("dueDate")) && !value("transaction") && !value("ledger")
+            && !value("erpDocument") && !value("debit") && !value("credit");
+          if (groupLabel) {
+            if (!bankBalances.accounts.has(value("dueDate"))) uncoveredBankLabels.add(value("dueDate"));
             continue;
           }
+          if (value("date").toUpperCase() === "ACTIVOS")
+            throw new Error(`${name}!${row}: contiene una apertura con importe además de SALDOS BANCOS. Se requiere aclarar su fecha; no se sumará como movimiento.`);
+          const account = bankBalances.accounts.get(value("ledger"));
           bankLedger = value("ledger"); bank = String(account?.normalized.bank ?? ""); bankCurrency = String(account?.normalized.currency ?? "");
           if (!account || account.status === "ERROR") errors.push(`Cuenta ${bankLedger || "sin código"} sin saldo inicial válido en SALDOS BANCOS.`);
         }
@@ -129,7 +139,11 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
           Object.assign(n, { date: date("date"), transaction: required("transaction"), debe: debit, haber: credit });
         }
         balances.set(balanceKey, balance);
-        Object.assign(n, { recordRole: opening ? "investment_opening" : "investment_movement", currency, ledgerCode: ledger, balance, counterpartLedger: value("counterpart"), erpDocument: value("erpDocument"), reference: value("reference"), description: value("description") || "Saldo inicial de inversión", rateKnown: false, rate: null, interest: null, endDate: null, investmentType: "fondo_mutuo", status: "vigente", bank: null });
+        const maturity = cellToDate(get("endDate")).iso;
+        if (value("endDate") && !maturity) errors.push("Fecha de Vencimiento inválida; no se reemplaza por contabilización.");
+        if (!value("endDate")) warnings.push("Sin fecha explícita de vencimiento. Requiere revisión antes de programar un rescate.");
+        if (maturity && n.date && maturity < String(n.date)) warnings.push("Vencimiento anterior a la contabilización: revisa el documento ERP.");
+        Object.assign(n, { recordRole: opening ? "investment_opening" : "investment_movement", currency, ledgerCode: ledger, balance, counterpartLedger: value("counterpart"), erpDocument: value("erpDocument"), reference: value("reference"), description: value("description") || "Saldo inicial de inversión", rateKnown: false, rate: null, interest: null, endDate: maturity, maturitySource: maturity ? `${name}!${XLSX.utils.encode_col(columns.endDate)}${row}` : null, investmentType: "fondo_mutuo", status: "vigente", bank: null });
       }
       const monetaryKeys = kind === "CLIENTES" ? ["amount"] : kind === "BANCOS" ? ["debit", "credit"] : ["net", "balance", "debit", "credit"];
       if (!n.currency) n.currency = monetaryKeys.map(k => moneyCurrency(get(k))).find(Boolean) ?? "";
@@ -145,6 +159,11 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       const raw = Object.fromEntries([...cells].map(([c, v]) => [`${XLSX.utils.encode_col(c)}${row} · ${text(rows.get(header)!.get(c))}`, { value: v.v ?? null, type: v.t, formula: v.f ?? null }]));
       records.push({ sheet: name, row, entityType, normalized: n, raw, status: errors.length ? "ERROR" : warnings.length ? "WARNING" : "VALID", warnings: [...errors, ...warnings].join(" · "), dedupeKey: String(n.sourceId) });
       if (++count > MAX_IMPORT_ROWS) throw new Error("ERP supera 20.000 registros financieros.");
+    }
+    if (uncoveredBankLabels.size && records.length) {
+      const warning = `Cabeceras sin apertura en SALDOS BANCOS: ${[...uncoveredBankLabels].join(", ")}. Fuera de cobertura; no representan saldos cero.`;
+      if (records[0].status !== "ERROR") records[0].status = "WARNING";
+      records[0].warnings = [records[0].warnings, warning].filter(Boolean).join(" · ");
     }
     skipped = Math.max(0, (ordered[ordered.length - 1] ?? header) - header - records.length);
     const firstMovementDate = records.filter(r => String(r.normalized.recordRole).endsWith("_movement")).map(r => String(r.normalized.date ?? "")).filter(Boolean).sort()[0] ?? null;

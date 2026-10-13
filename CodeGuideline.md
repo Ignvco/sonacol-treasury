@@ -27,6 +27,9 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20261013010000000_daily_openings_maturities.sql**: Daily opening validation for new ERP imports, compatibility validation adapter, and source maturity evidence on existing position identities. No historical/manual rewrites.
+- **src/components/treasury/InvestmentMaturities.tsx**: Native-currency ERP maturity ledger, cutoff-relative alerts, authorized export and shared source evidence for investments/rescue planning. Does not allocate withdrawals to invented lots.
+
 - **src/financial-engine/cash-equivalence.ts**: Optional same-cut, single-currency closure comparison against independently declared reference totals; validates the reference equations and bank control without mutating operational data.
 - **src/components/treasury/CashEquivalence.tsx**: Shared session-only reference form in CashPosition, with explicit scope confirmation, visible differences and authorized CSV export. No database migration or recurring CAJA input.
 

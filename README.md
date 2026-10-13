@@ -1426,6 +1426,8 @@ Sin pruebas, lint, compilación ni migraciones ejecutadas por solicitud del usua
 
 ## 36. Patch 4: control de equivalencia del cierre
 
+> Para el contrato diario y los vencimientos explícitos del ERP nuevo, véase `docs/erp-09-10-aperturas-vencimientos.md` y la migración `20261013010000000_daily_openings_maturities.sql`.
+
 Incremental sobre `9c20d45` (patches 1–3 publicados). No requiere nuevas migraciones, cambios de dependencias ni importación diaria de CAJA.
 
 Resumen y Flujo de caja incluyen «Comparar cierre con una referencia» dentro de Posición de caja. Ingresa documento/hoja/celdas, fecha y seis totales independientes del cierre de referencia: saldo bancario real, ingresos pendientes, pagos pendientes sin colocaciones, caja antes de colocar, colocaciones pendientes y liquidez final. Las cifras no se precargan desde los cálculos de la app ni desde un Excel de otro corte. Cada campo acepta número sin separadores de miles y hasta dos decimales; vacío no equivale a cero.

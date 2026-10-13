@@ -10,7 +10,7 @@ export function ErpImportContext({ initial, busy, firstBankDate, firstInvestment
   const dates = [value.cutoffDate, value.periodStart, value.investmentPeriodStart];
   return <section className="mb-4 rounded-xl border p-4" aria-label="Cobertura de datos ERP">
     <h3 className="font-semibold">Cobertura de la exportación ERP</h3>
-    <p className="mt-1 text-sm text-muted-foreground">Declara la fecha de los datos y el período de cada mayor. Las aperturas corresponden al día anterior al inicio. La última fila no acredita la fecha de extracción.</p>
+    <p className="mt-1 text-sm text-muted-foreground">Declara la fecha de los datos y el período de cada mayor. Con SALDOS BANCOS, la apertura es al comienzo del día: inicio bancario y corte deben coincidir. Si esa hoja no trae fecha, confirmas aquí a qué día pertenecen sus saldos. El mayor de inversiones conserva su propio período. La última fila no acredita la fecha de extracción.</p>
     <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <label className="grid gap-1 text-sm">Empresa<input className="t-input" value={value.company} maxLength={100} disabled={busy} onChange={e => update("company", e.target.value)} /></label>
       <label className="grid gap-1 text-sm">Moneda local<select className="t-input" value={value.localCurrency} disabled={busy} onChange={e => update("localCurrency", e.target.value)}>{["CLP", "USD", "UF", "UTM"].map(c => <option key={c}>{c}</option>)}</select></label>
