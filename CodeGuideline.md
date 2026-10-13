@@ -158,6 +158,11 @@ Whenever a new module (such as a component, hook, or utility) or a new page is a
   - Add comments for complex logic.
   - Document the purpose of each module at the top of the file if not obvious.
 
+## ERP refresh review (patch 3)
+
+- `src/pages/importations/ErpRefreshReview.tsx` presents incoming account coverage and execution conflicts without matching by amounts.
+- `20261013000000000_erp_refresh_review.sql` wraps the existing comparison/import RPCs, enforcing the same review under the import transaction lock. The helper is private; no new public data endpoint or dependencies.
+
 ## Example: Adding a New "Profile" Page
 
 1. **Create a directory:**  

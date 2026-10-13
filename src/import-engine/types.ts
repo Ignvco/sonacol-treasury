@@ -93,7 +93,19 @@ export interface ImportComparisonRow {
  manualEdited?:boolean; row:number; change:"new"|"modified"|"unchanged"|"conflict"|"invalid"; entityId:string|null;
  before:Record<string,unknown>|null; after:Record<string,unknown>; reason:string|null;
 }
-export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;uncoveredCurrencies?:string[];}
+export interface ErpRefreshReview {
+  blocking: boolean;
+  verified: number;
+  uncoveredAccounts: { ledger: string; currency: string }[];
+  executions: {
+    kind: "manual" | "redemption"; id: string; description: string | null;
+    sourceKey: string; ledger: string; currency: string; date: string;
+    amount: number; bankAmount: number; incomingAmount: number | null;
+    allocated: number; periodStart: string | null;
+    state: "uncovered_account" | "before_period" | "missing_movement" | "changed_movement" | "overallocated" | "ambiguous_duplicate";
+  }[];
+}
+export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;uncoveredCurrencies?:string[];refreshReview?:ErpRefreshReview;}
 export interface ImportPreview extends ImportSummary { fileHash: string; comparison?:ImportComparison; comparisonError?:string; }
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 20000;

@@ -1,4 +1,5 @@
 import { ErpImportContext } from "./ErpImportContext";
+import { ErpRefreshReview } from "./ErpRefreshReview";
 import { useAuth } from "@/contexts/auth-context";
 import { ReadingProfileSummary } from "./ReadingProfileSummary";
 import { ImportCutoff } from "./ImportCutoff";
@@ -148,6 +149,7 @@ export function ImportPreview({
             <ReadingProfileSummary key={sheet.name} reading={sheet.reading!} />
           ))}
         <ImportControlTotals records={preview.records} />
+        <ErpRefreshReview review={preview.comparison?.refreshReview} />
         {!!preview.comparison?.uncoveredCurrencies?.length && <p role="alert" className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm">
           La carga anterior contenía {preview.comparison.uncoveredCurrencies.join(", ")}, fuera de la cobertura de esta exportación. Esos datos permanecen en el histórico. Confirmar esta carga no acredita que sus saldos sean cero.
         </p>}
@@ -325,6 +327,7 @@ export function ImportPreview({
                 !!cutoffIssue ||
                 !reviewed ||
                 !preview.comparison ||
+                !!preview.comparison?.refreshReview?.blocking ||
                 preview.error > 0 ||
                 !preview.total ||
                 preview.valid + preview.warning === 0

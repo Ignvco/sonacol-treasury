@@ -1325,6 +1325,8 @@ Se incorporan casos de regresión para cierre del corte, Cargo/Abono, ejecución
 
 ## 34. Patch 2: planificación operativa y liquidez después de colocar
 
+> Actualización posterior: el patch 3 agrega revisión preventiva de ejecuciones al importar ERP; véase la sección 35. No certifica equivalencia al mismo corte con CAJA.
+
 **Revisión por lectura de código, diff y referencias del archivo. Sin ejecutar pruebas, TypeScript, lint, build, macros ni migraciones. Los casos nuevos se entregan sin ejecutar; no hay certificación de compilación, integración SQL ni equivalencia numérica de producción.**
 
 `sonacol-planificacion-operativa.patch` es incremental sobre el commit `44fb0cdcda53cca9592c98c464b0bd4554758751` de `feat/erp-native-operations`, con el patch 1 ya aplicado. Agrega, en este orden:
@@ -1402,3 +1404,20 @@ La auditoría de Excel distingue: caja real CLP **2.172.083.343**, rescate del d
 Las celdas auxiliares de vencimiento/rentabilidad de INVERSIONES estaban desactualizadas respecto del 09/10; no se utilizan para inventar nuevos rescates o intereses. Las 6 partidas de COLOCACIONES comparten la cuenta contable `511030001`: el ERP no aporta por sí solo identidad de fondo/tramo. La asignación y el límite de capital se revisan en la plataforma.
 
 Pendiente de verificación en ejecución: instalación sobre la base vigente, adopción atómica e idempotente, edición y preservación de decisiones, cuentas y monedas, ejecuciones compartidas/parciales/completas, arrastre a nuevas cargas, vistas móviles y conservación de previsiones congeladas. Se agregan casos en `tests/planning-operations.test.ts`, sin ejecutarlos. El control más amplio de cobertura/reimportación y la comprobación independiente de equivalencia al mismo corte siguen correspondiendo a los patches 3 y 4.
+
+## 35. Patch 3: revisión preventiva de actualización ERP
+
+Requiere ambos SQL del patch 2 y agrega `20261013000000000_erp_refresh_review.sql`. Instalar la migración antes de desplegar el frontend. No modifica filas existentes, cálculos de Cargo/Abono ni el mecanismo de arrastre; envuelve las RPC actuales y mantiene sus controles de permisos, versión y transacción.
+
+La comparación de una carga vigente incorpora `refreshReview`: cuentas/monedas ausentes, asignaciones verificadas y evidencia que requiere revisión. Se suman conjuntamente ejecuciones de compromisos y rescates, incluso cancelados no eliminados. La revisión se repite en el servidor bajo el bloqueo de importación, sin confiar en el botón del navegador.
+
+- Identidad exacta presente: compara cuenta, moneda, fecha, tipo e importe bancario original y comprueba el total asignado.
+- Identidad ausente dentro del período cubierto: bloquea. Cambiar descripción o importe puede cambiar la identidad; no se intenta adivinar una correspondencia nueva.
+- Cantidad de movimientos idénticos modificada: bloquea si afecta una ejecución. No deduplica movimientos legítimos por importe ni por descripción.
+- Ejecución anterior a la apertura: conserva la evidencia histórica sin volver a contabilizarla. No certifica que la apertura sea correcta.
+- Cuenta/moneda ausente: advierte, no interpreta cero, conserva la evidencia. No combina saldos de distintos cortes ni reconstruye la cuenta omitida.
+- Carga histórica: no compara ni arrastra las ejecuciones de la planificación vigente. Mantiene el comportamiento histórico anterior.
+
+Para un bloqueo, corregir primero una exportación incompleta o revisar la asignación en la versión vigente mediante su diálogo de ejecución. Retirar evidencia únicamente si es incorrecta y volver a analizar ERP. No existe reasignación automática ni una excepción para ignorar el bloqueo. Una corrección bancaria legítima puede exigir revisión explícita de la asignación anterior y vinculación posterior al movimiento corregido.
+
+Sin pruebas, lint, compilación ni migraciones ejecutadas por solicitud del usuario. Pendiente validar en una base de ensayo: reimportación idéntica, cambio de corte/apertura, movimiento corregido o ausente, duplicados, combinación manual/rescate, conflictos concurrentes, cobertura por moneda y carga histórica. Este patch no incorpora un asistente de remapeo ni certifica el cierre de la migración o equivalencia con CAJA; requiere ERP del mismo corte para esa comprobación.
