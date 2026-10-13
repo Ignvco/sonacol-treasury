@@ -33,6 +33,8 @@ export interface BusinessDecision {
   id: string; batch_id: string; kind: "adjustment" | "redemption" | "rule";
   target_key: string; values_json: Record<string, string | number | null>;
   revision: number; deleted: boolean; updated_at: string;
+  execution_json?: { sourceKey: string; amount: number; date: string; recordId?: string }[];
+  plan_references?: string[];
   source_json?: {
     recordId: string; entityId: string; kind: RawRow["kind"]; sourceKey: string;
     row: number; fileName: string; cutoff: string; normalized: RawRow["normalized"];

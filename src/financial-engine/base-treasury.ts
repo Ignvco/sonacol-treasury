@@ -26,6 +26,8 @@ export const nextDate = (date: string, days: number) => {
 export const sourceKey = (r: Pick<TreasuryRow, "kind" | "id">) => r.kind + ":" + r.id;
 export const CASH_POSITION_ENGINE = "erp-cash-position-v3";
 export const includesCutoffDay = (engineVersion?: string) => engineVersion === CASH_POSITION_ENGINE;
+/** Placements are already expenses in the forecast; this is a breakdown, not a second debit. */
+export const isPlannedPlacement = (r: TreasuryRow) => r.kind === "projection" && r.type === "expense" && r.normalized?.category === "investment_placement";
 export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff: string, horizon = 30, currency = "BASE", bank = "", engineVersion?: string) {
   if (!isTreasuryDate(cutoff) || (!Number.isInteger(horizon) || horizon < 1 || horizon > 366)) throw new Error("Fecha u horizonte inválidos.");
   // Missing/older versions retain the exact next-day policy of saved forecasts.
@@ -71,8 +73,10 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
   // another copy of the bank movements already contained in available.
   const days = Array.from({length:horizon + (includeCutoff ? 1 : 0)}, (_,i) => {
     const date = nextDate(cutoff,i + (includeCutoff ? 0 : 1)), movements = events.filter(r => r.effectiveDate === date);
+    const placements = total(movements.filter(isPlannedPlacement).map(r => -r.signed));
+    const balance = total([available,...events.filter(r=>r.effectiveDate<=date).map(r=>r.signed)]);
     return {date, income:total(movements.filter(r=>r.signed>0).map(r=>r.signed)), expense:total(movements.filter(r=>r.signed<0).map(r=>-r.signed)),
-      balance:total([available,...events.filter(r=>r.effectiveDate<=date).map(r=>r.signed)])};
+      placements, beforePlacements: total([balance, placements]), balance};
   });
   const positions = [...new Set(cashRows.map(r=>r.bank+"|"+r.ledger+"|"+r.currency))].map(key=>{
     const items = cashRows.filter(r=>r.bank+"|"+r.ledger+"|"+r.currency===key);
@@ -97,10 +101,15 @@ export function baseTreasury(input: TreasuryRow[], links: ForecastLink[], cutoff
     const movements = accountEvents.get(p.key) ?? [];
     const income = total(movements.filter(r => r.signed > 0).map(r => r.signed));
     const expense = total(movements.filter(r => r.signed < 0).map(r => -r.signed));
-    return { ...p, income, expense, closing: total([p.amount, income, -expense]), events: movements };
+    const placements = total(movements.filter(isPlannedPlacement).map(r => -r.signed));
+    const closing = total([p.amount, income, -expense]);
+    return { ...p, income, expense, placements, operatingExpense: total([expense, -placements]), beforePlacements: total([closing, placements]), closing, events: movements };
   });
+  const cutoffPlacements = total(cutoffEvents.filter(isPlannedPlacement).map(r => -r.signed));
   const cutoffPosition = includeCutoff ? {
     date: cutoff, available, income: cutoffIncome, expense: cutoffExpense,
+    placements: cutoffPlacements, operatingExpense: total([cutoffExpense, -cutoffPlacements]),
+    beforePlacements: total([available, cutoffIncome, -cutoffExpense, cutoffPlacements]),
     closing: total([available, cutoffIncome, -cutoffExpense]), events: cutoffEvents,
     accounts: cutoffAccounts, unassigned,
   } : null;

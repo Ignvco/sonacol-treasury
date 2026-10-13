@@ -497,6 +497,7 @@ export const dataService = {
         revision: r.revision,
         edited: r.edited,
         executedAmount: Number(r.normalized?.executedAmount ?? 0),
+        bankLedger: r.settlementLedger || r.ledger,
       }));
   },
   async getPayments(): Promise<Payment[]> {
@@ -614,6 +615,7 @@ export const dataService = {
         category: p.category,
         status: p.status,
         bank: p.bankId ?? "Sin banco",
+        bankLedger: p.bankLedger || null,
       },
       p_delete: remove,
     });

@@ -19,6 +19,9 @@ export function executiveReport(
       { Métrica: "Ingresos pendientes del corte", Valor: model.cutoffPosition.income, Moneda: context.currency },
       { Métrica: "Egresos pendientes del corte", Valor: model.cutoffPosition.expense, Moneda: context.currency },
       { Métrica: "Cierre previsto del corte", Valor: model.cutoffPosition.closing, Moneda: context.currency },
+      { Métrica: "Caja prevista antes de colocar", Valor: model.cutoffPosition.beforePlacements, Moneda: context.currency },
+      { Métrica: "Colocaciones pendientes del corte", Valor: model.cutoffPosition.placements, Moneda: context.currency },
+      { Métrica: "Liquidez prevista tras colocaciones", Valor: model.cutoffPosition.closing, Moneda: context.currency },
     ] : []),
     ...(controls.length ? [
       { Métrica: "Ingresos bancarios registrados · Cargo", Valor: total(controls.map(c => c.income)), Moneda: context.currency },
@@ -50,6 +53,8 @@ export function executiveReport(
     "Saldo inicial": i === 0 ? model.available : model.days[i - 1].balance,
     Ingresos: d.income,
     Egresos: d.expense,
+    "De los egresos: colocaciones": d.placements,
+    "Antes de colocar": d.beforePlacements,
     Saldo: d.balance,
     Moneda: context.currency,
   }));
@@ -92,6 +97,7 @@ export function executiveReport(
       ...(model.cutoffPosition ? [{ title: "Posición al corte", rows: model.cutoffPosition.accounts.map(p => ({
         Banco: p.bank, Cuenta: p.ledger, Moneda: p.currency, "Saldo real": p.amount,
         "Ingresos pendientes": p.income, "Egresos pendientes": p.expense, "Cierre previsto": p.closing,
+        "Antes de colocar": p.beforePlacements, "Colocaciones pendientes": p.placements,
       })) }] : []),
       ...(controls.length ? [{ title: "Control bancario", rows: controls.map(c => ({ Banco: c.bank, Cuenta: c.ledger, Moneda: c.currency, Desde: c.periodStart, Corte: c.cutoff, SaldoInicial: c.opening, Cargos: c.income, Abonos: c.expense, SaldoCalculado: c.calculated, SaldoInformado: c.reported ?? "No informado", Diferencia: c.difference ?? "No comprobable", Observaciones: c.issues.join(" · ") || (c.reported === null ? "Saldo calculado; referencia final no informada" : "Coincide") })) }] : []),
       { title: "Trazabilidad", rows: provenance },

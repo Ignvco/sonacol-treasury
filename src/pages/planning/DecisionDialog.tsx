@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CASHFLOW_CATEGORY_LABEL } from "@/financial-engine/types";
+import { CASHFLOW_CATEGORY_LABEL, type Projection } from "@/financial-engine/types";
 import type { BusinessDecision, RawSnapshot } from "@/financial-engine/snapshot";
 import { planningService } from "@/services/planningService";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
 import { DecisionEvidence } from "./DecisionEvidence";
+import { ManualExecutionDialog } from "../projections/ManualExecutionDialog";
 
 const names = { adjustment: "Ajuste operativo", redemption: "Rescate programado", rule: "Regla de negocio" };
 export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: {
@@ -15,10 +16,11 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
   const [values, setValues] = useState<BusinessDecision["values_json"]>(initial?.values_json ?? (kind === "rule" ? { ruleType: "collection", days: 5, priority: nextPriority } : kind === "redemption" ? { status: "planned", currency: snapshot.coverage?.currency ?? "CLP" } : {}));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [reviewedTarget, setReviewedTarget] = useState("");
+  const [executionOpen, setExecutionOpen] = useState(false);
   const update = (field: string, value: string | number) => setValues(v => ({ ...v, [field]: value }));
   const targets = snapshot.rows.filter(r => kind === "redemption" ? r.kind === "investment" : initial?.source_json?.kind === "invoice" ? r.kind === "invoice" && r.normalized.currency === initial.source_json.normalized.currency : ["invoice", "cash_flow"].includes(r.kind) && r.normalized.recordRole !== "bank_opening");
   const selected = snapshot.rows.find(r => r.normalized.businessKey === target);
-  const banks = snapshot.rows.filter(r => r.normalized.recordRole === "bank_opening");
+  const banks = snapshot.rows.filter(r => r.normalized.recordRole === "bank_opening" && (kind === "redemption" ? r.normalized.currency === values.currency : kind === "adjustment" && selected?.kind === "invoice" ? r.normalized.currency === selected.normalized.currency : true));
   const collectionRule = kind === "rule" && values.ruleType === "collection";
   const bindingChanged = !!initial && kind !== "rule" && target !== initial.target_key;
   const bankAllowed = kind === "redemption" || collectionRule || (kind === "adjustment" && selected?.kind === "invoice");
@@ -30,6 +32,11 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
     catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); }
     finally { setBusy(false); }
   };
+  if (executionOpen && initial && snapshot.batch) return <ManualExecutionDialog initial={{
+    id: initial.id, batchId: snapshot.batch.id, revision: initial.revision, date: String(initial.values_json.date),
+    amount: Number(initial.values_json.amount), currency: initial.values_json.currency as Projection["currency"],
+    type: "income", category: "investment_redemption", description: String(initial.values_json.description || "Rescate programado"), status: "proyectado",
+  }} onClose={onClose} />;
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] min-w-0 grid-cols-1 overflow-y-auto break-words sm:max-w-xl">
     <DialogHeader><DialogTitle>{names[kind]}</DialogTitle><DialogDescription>La decisión se guarda por separado y se conserva al actualizar los datos ERP.</DialogDescription></DialogHeader>
     <form className="grid min-w-0 grid-cols-1 gap-4 [&>*]:min-w-0" onSubmit={e => { e.preventDefault(); void save(); }}>
@@ -48,7 +55,8 @@ export function DecisionDialog({ snapshot, kind, initial, targetKey, onClose }: 
         <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Prioridad · el número mayor se aplica al final<input className="t-input w-full min-w-0 max-w-full" type="number" min={0} max={9999} required value={Number(values.priority ?? 10)} onChange={e => update("priority", Number(e.target.value))} /></label>
       </>}
       {(kind === "redemption" || (kind === "adjustment" && selected?.kind === "invoice")) && <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Fecha prevista<input className="t-input w-full min-w-0 max-w-full" type="date" min="2000-01-01" max="2100-12-31" required={kind === "redemption"} value={String(values.date ?? "")} onChange={e => update("date", e.target.value)} /></label>}
-      {kind === "redemption" && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Importe del rescate ({values.currency})<input className="t-input w-full min-w-0 max-w-full" type="number" min="0.01" step="0.01" required value={values.amount ?? ""} onChange={e => update("amount", Number(e.target.value))} /></label><label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Estado<select className="t-input w-full min-w-0 max-w-full" value={String(values.status)} onChange={e => update("status", e.target.value)}><option value="planned">Programado</option><option value="executed">Ejecutado</option><option value="cancelled">Cancelado</option></select></label></div>}
+      {kind === "redemption" && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Importe del rescate ({values.currency})<input className="t-input w-full min-w-0 max-w-full" type="number" min="0.01" step="0.01" required value={values.amount ?? ""} onChange={e => update("amount", Number(e.target.value))} /></label><label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Estado<select className="t-input w-full min-w-0 max-w-full" value={String(values.status)} onChange={e => update("status", e.target.value)}><option value="planned">Programado</option>{initial?.values_json.status === "executed" && <option value="executed">Ejecutado · estado anterior</option>}<option value="cancelled">Cancelado</option></select></label></div>}
+      {kind === "redemption" && initial && <div className="rounded-lg border p-3 text-sm"><p>La ejecución parcial o total se registra vinculando cargos ERP de la cuenta receptora. No se deduce de la fecha ni del estado.</p><button type="button" className="t-button-secondary mt-2" disabled={busy} onClick={() => setExecutionOpen(true)}>Ver o registrar ejecución guardada</button><p className="mt-1 text-xs text-muted-foreground">Abre la versión guardada; guarda primero las modificaciones de este formulario.</p></div>}
       {bankAllowed && <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Cuenta receptora<select className="t-input w-full min-w-0 max-w-full" required={kind === "redemption"} value={String(values.bankLedger ?? "")} onChange={e => setValues(v => ({ ...v, bankLedger: e.target.value, bank: null }))}><option value="">Sin asignación específica</option>{banks.map(r => <option key={r.id} value={r.normalized.ledgerCode}>{r.normalized.bank} · {r.normalized.ledgerCode} · {r.normalized.currency}</option>)}</select></label>}
       {(kind === "adjustment" || (kind === "rule" && !collectionRule)) && <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Clasificación<select className="t-input w-full min-w-0 max-w-full" required={kind === "rule"} value={String(values.category ?? "")} onChange={e => update("category", e.target.value)}><option value="">Conservar clasificación</option>{Object.entries(CASHFLOW_CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>}
       {kind !== "rule" && <label className="grid min-w-0 grid-cols-1 gap-1 text-sm">Descripción operativa<input className="t-input w-full min-w-0 max-w-full" maxLength={300} value={String(values.description ?? "")} onChange={e => update("description", e.target.value)} /></label>}

@@ -29,7 +29,7 @@ import { amountInClp } from "@/financial-engine/currency";
 import { total, pendingProjectionAmount } from "@/financial-engine/base-treasury";
 import { ManualDialog } from "./projections/ManualDialog";
 import { ManualExecutionDialog } from "./projections/ManualExecutionDialog";
-import { InitialPlan } from "./planning/InitialPlan";
+import { PlanReview } from "./planning/PlanReview";
 
 /** Statuses that stay out of the horizon figures. */
 const INACTIVE = ["cancelado", "borrador"];
@@ -140,7 +140,7 @@ export default function Projections() {
           ) : undefined
         }
       />
-      {bundle.batch && bundle.rows.some(r => r.normalized?.sourceProfile === "ERP-RAW-v1" && r.normalized?.company === "SONACOL") && <InitialPlan key={bundle.batch.id} batch={bundle.batch.id} canWrite={canWrite} />}
+      {bundle.batch && bundle.rows.some(r => r.normalized?.sourceProfile === "ERP-RAW-v1" && r.normalized?.company === "SONACOL") && <PlanReview key={bundle.batch.id} batch={bundle.batch.id} canWrite={canWrite} />}
       <ProjectionsBento
         cutoff={bundle.cutoff}
         view={view}

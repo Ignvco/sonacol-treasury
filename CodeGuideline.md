@@ -27,11 +27,16 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20261012010000000_planning_operations.sql**: Evidence-backed partial redemptions, shared bank allocation limits, explicit manual bank accounts and forward preservation of operations.
+- **supabase/migrations/20261012020000000_october_plan_review.sql**: Private October reference catalog and atomic, explicit adoption preserving identities, edits, cancellations and source evidence.
+- **src/services/planReviewService.ts**, **src/pages/planning/PlanReview.tsx**, **src/pages/planning/PlanReviewRows.tsx**: Reviewed transition of commitments, placements, redemptions and collection accounts into native planning; no recurring workbook dependency.
+- **src/pages/planning/Placements.tsx**: Native planned investment outflows, editable alongside commitments, with bank execution evidence and pending liquidity.
+- **tests/planning-operations.test.ts**: Placement liquidity, partial rescue allocation, shared posting limits, carry and read-only reference adoption cases, delivered without execution.
 - **supabase/migrations/20261012000000000_cash_position.sql**: Batch-scoped projection policy; activates cutoff-day planning for the current and subsequent ERP loads while preserving older batches and saved forecasts.
 - **src/components/treasury/CashPosition.tsx**: Shared cutoff cash bridge, with separate real cash, pending income/expense and projected closing, and source drill-downs in Resumen and Flujo.
 - **tests/cash-position.test.ts**: Cutoff-day planning, partial execution, receiving accounts, daily aggregation and saved-policy regression cases; this patch delivers the cases without executing them.
 - **supabase/migrations/20260928000000000_initial_business_plan.sql**: Reviewed SONACOL planning bootstrap with preserved source evidence, duplicate/conflict control, and partial execution against bank postings; original ERP rows and earlier snapshots remain unchanged.
-- **src/services/initialPlanService.ts**, **src/pages/planning/InitialPlan.tsx**: Preview and incorporate missing initial commitments once; the subsequent ERP imports carry the same business records.
+- **src/services/initialPlanService.ts**: Explicit bank allocation service for manual commitments, placements and redemptions. The former September-only `InitialPlan.tsx` was replaced by the reviewed October transition.
 - **src/pages/projections/ManualExecutionDialog.tsx**: Explicit allocation and reversal of a bank posting against a planned commitment, with remaining-amount and concurrency controls.
 - **src/financial-engine/bank-activity.ts**: Registered ERP income/expense and daily bank cash, excluding openings from period flows and keeping past postings out of forecasts.
 - **src/components/treasury/BankActivity.tsx**: Shared registered-cash summary and daily/source drill-down in Resumen and Flujo de caja, using their selected snapshot, bank and currency.

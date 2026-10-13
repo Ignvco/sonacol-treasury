@@ -32,6 +32,7 @@ export function ManualDialog({
   onClose,
   duplicate = false,
   suggestedDate,
+  preset,
 }: {
   initial: Projection | null;
   batchId: string;
@@ -40,6 +41,7 @@ export function ManualDialog({
   onClose: () => void;
   duplicate?: boolean;
   suggestedDate?: string;
+  preset?: Partial<Projection>;
 }) {
   const existing = !!initial && !duplicate;
   const { user } = useAuth();
@@ -65,9 +67,10 @@ export function ManualDialog({
           description: "",
           status: "proyectado",
           bankId: "",
+          ...preset,
         },
   );
-  const [amount, setAmount] = useState(initial ? String(initial.amount) : ""),
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : preset?.amount ? String(preset.amount) : ""),
     [details, setDetails] = useState<Partial<ManualDetails>>({}),
     [frequency, setFrequency] = useState(""),
     [count, setCount] = useState(1),
@@ -95,6 +98,8 @@ export function ManualDialog({
     setForm((f) => ({ ...f, ...value }));
   const categories =
     form.type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const bankAccounts = (state.data?.bundle.rows ?? []).filter(r => r.normalized?.recordRole === "bank_opening" && r.currency === form.currency);
+  const isErp = (state.data?.bundle.rows ?? []).some(r => r.normalized?.sourceProfile === "ERP-RAW-v1");
   const run = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -123,6 +128,7 @@ export function ManualDialog({
           category: form.category,
           status: form.status,
           bank: form.bankId || "Sin banco",
+          bankLedger: form.bankLedger || null,
         },
         p_details: details,
         p_frequency: frequency || null,
@@ -166,7 +172,7 @@ export function ManualDialog({
       for (const [i, d] of dates.entries())
         next.push({
           ...template,
-          normalized: existing ? template?.normalized : undefined,
+          normalized: { ...(existing ? template?.normalized : {}), category: form.category },
           id: existing ? initial!.id : "preview-" + i,
           kind: "projection",
           origin: "MANUAL",
@@ -178,6 +184,7 @@ export function ManualDialog({
           plannedDate: d,
           status: form.status,
           bank: form.bankId || "Sin banco",
+          settlementLedger: form.bankLedger || "",
           description: form.description,
           ledger: "",
           document: "",
@@ -244,7 +251,7 @@ export function ManualDialog({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90dvh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {existing
@@ -258,8 +265,8 @@ export function ManualDialog({
             modificarse de forma independiente.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={save} className="grid gap-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={save} className="grid min-w-0 gap-4 [&_label]:min-w-0 [&_select]:min-w-0 [&_select]:max-w-full">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">
               Tipo
               <select
@@ -317,7 +324,7 @@ export function ManualDialog({
                 className="t-input"
                 value={form.currency}
                 onChange={(e) =>
-                  update({ currency: e.target.value as Projection["currency"] })
+                  update({ currency: e.target.value as Projection["currency"], bankLedger: "", bankId: "" })
                 }
               >
                 {CURRENCIES.map((c) => (
@@ -365,6 +372,7 @@ export function ManualDialog({
                   update({ category: e.target.value as Projection["category"] })
                 }
               >
+                {!categories.includes(form.category) && <option value={form.category}>{CASHFLOW_CATEGORY_LABEL[form.category]}</option>}
                 {categories.map((c) => (
                   <option key={c} value={c}>
                     {CASHFLOW_CATEGORY_LABEL[c]}
@@ -373,8 +381,15 @@ export function ManualDialog({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              Banco
-              <select
+              {isErp ? "Cuenta bancaria" : "Banco"}
+              {isErp ? <select className="t-input w-full" value={form.bankLedger ?? ""} required={form.category === "investment_placement"} onChange={e => {
+                const account = bankAccounts.find(r => r.ledger === e.target.value);
+                update({ bankLedger: e.target.value, bankId: account?.bank ?? "" });
+              }}>
+                <option value="">Sin cuenta asignada</option>
+                {form.bankLedger && !bankAccounts.some(r => r.ledger === form.bankLedger) && <option value={form.bankLedger}>{form.bankLedger} · fuera de cobertura</option>}
+                {bankAccounts.map(r => <option key={r.id} value={r.ledger}>{r.bank} · {r.ledger} · {r.currency}</option>)}
+              </select> : <select
                 className="t-input"
                 value={form.bankId ?? ""}
                 onChange={(e) => update({ bankId: e.target.value })}
@@ -385,7 +400,7 @@ export function ManualDialog({
                 ].map((b) => (
                   <option key={b}>{b}</option>
                 ))}
-              </select>
+              </select>}
             </label>
             <label className="grid gap-1 text-sm">
               Estado

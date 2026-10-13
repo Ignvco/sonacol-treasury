@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { SnapshotProjection } from "@/financial-engine/projection";
-import type { TreasuryRow } from "@/financial-engine/base-treasury";
+import { isPlannedPlacement, type TreasuryRow } from "@/financial-engine/base-treasury";
 import { formatDateMedium } from "@/financial-engine/format";
 import { DataTable } from "./DataTable";
 import { SectionCard } from "./SectionCard";
@@ -16,12 +16,14 @@ export function CashPosition({ model, formatAmount }: {
   const items = [
     { title: "Saldo bancario real al corte", amount: position.available, rows: model.cashRows },
     { title: "Ingresos pendientes del corte", amount: position.income, rows: position.events.filter(r => r.signed > 0) },
-    { title: "Egresos pendientes del corte", amount: position.expense, rows: position.events.filter(r => r.signed < 0) },
-    { title: "Cierre previsto del corte", amount: position.closing, rows: [...model.cashRows, ...position.events] },
+    { title: "Pagos pendientes sin colocaciones", amount: position.operatingExpense, rows: position.events.filter(r => r.signed < 0 && !isPlannedPlacement(r)) },
+    { title: "Caja prevista antes de colocar", amount: position.beforePlacements, rows: [...model.cashRows, ...position.events.filter(r => !isPlannedPlacement(r))] },
+    { title: "Colocaciones pendientes del corte", amount: position.placements, rows: position.events.filter(isPlannedPlacement) },
+    { title: "Liquidez prevista tras colocaciones", amount: position.closing, rows: [...model.cashRows, ...position.events] },
   ];
   return <SectionCard title={`Posición de caja · ${formatDateMedium(position.date)}`}
-    subtitle="Saldo bancario real + ingresos pendientes − egresos pendientes = cierre previsto del corte.">
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    subtitle="Saldo real + ingresos pendientes − pagos pendientes − colocaciones pendientes = liquidez prevista del corte.">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map(item => <button key={item.title} type="button"
         className="min-w-0 rounded-xl border p-4 text-left hover:border-brand/50"
         onClick={() => setDetail({ title: item.title, rows: item.rows })}>
@@ -42,8 +44,10 @@ export function CashPosition({ model, formatAmount }: {
         { key: "currency", header: "Moneda" },
         { key: "amount", header: "Saldo real", align: "right", render: r => baseNumber(r.amount) },
         { key: "income", header: "Ingresos pendientes", align: "right", render: r => baseNumber(r.income) },
-        { key: "expense", header: "Egresos pendientes", align: "right", render: r => baseNumber(r.expense) },
-        { key: "closing", header: "Cierre previsto", align: "right", render: r => baseNumber(r.closing) },
+        { key: "operatingExpense", header: "Pagos pendientes", align: "right", render: r => baseNumber(r.operatingExpense) },
+        { key: "beforePlacements", header: "Antes de colocar", align: "right", render: r => baseNumber(r.beforePlacements) },
+        { key: "placements", header: "Colocaciones", align: "right", render: r => baseNumber(r.placements) },
+        { key: "closing", header: "Liquidez prevista", align: "right", render: r => baseNumber(r.closing) },
       ]} />
     <p className="mt-2 text-xs text-muted-foreground">Cada cuenta se muestra en su moneda original, sin conversión.</p>
     {position.unassigned.length > 0 && <button type="button"

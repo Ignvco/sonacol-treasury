@@ -1322,3 +1322,83 @@ La auditoría del CAJA 09/10 distinguió $2.172.083.343 de saldo contable y $2.8
 La planificación vigente, las colocaciones propuestas y el remanente posterior a colocaciones corresponden al siguiente patch. Esta entrega no reemplaza automáticamente los 43 compromisos iniciales de septiembre por los 38 de octubre. El resultado previsto sigue dependiendo de las decisiones realmente registradas en la plataforma.
 
 Se incorporan casos de regresión para cierre del corte, Cargo/Abono, ejecución parcial/completa, cuenta receptora, pendientes sin cuenta, monedas, vencidos, agregación semanal/mensual, coherencia de reportes/escenarios, mínimo al corte y actualización de una instalación con históricos congelados. Se adaptan tres llamadas de pruebas existentes al contexto versionado. **Ninguno de estos casos fue ejecutado**; la compilación, la integración SQL y el comportamiento de navegador quedan pendientes de verificación. No se modificó producción ni se hizo push o despliegue.
+
+## 34. Patch 2: planificación operativa y liquidez después de colocar
+
+**Revisión por lectura de código, diff y referencias del archivo. Sin ejecutar pruebas, TypeScript, lint, build, macros ni migraciones. Los casos nuevos se entregan sin ejecutar; no hay certificación de compilación, integración SQL ni equivalencia numérica de producción.**
+
+`sonacol-planificacion-operativa.patch` es incremental sobre el commit `44fb0cdcda53cca9592c98c464b0bd4554758751` de `feat/erp-native-operations`, con el patch 1 ya aplicado. Agrega, en este orden:
+
+1. `20261012010000000_planning_operations.sql`.
+2. `20261012020000000_october_plan_review.sql`.
+
+No modifica el lector de datos crudos ni instala datos operativos automáticamente. Mantiene `erp-cash-position-v3`, su corte seleccionado y los snapshots congelados. Las migraciones y el frontend deben actualizarse juntos; el antiguo botón de incorporación de septiembre se reemplaza por la transición revisada.
+
+### Referencia de negocio y transición
+
+La referencia es **CAJA SONACOL v4 09-10-2026.xlsm**, SHA-256 `786e2b1282c6ca60c0c91de9aaa78225c6bd835011f99983524fc5a61d80be98`. Su catálogo privado se consulta mediante un RPC autenticado. No requiere subir CAJA a la aplicación y no forma parte de la actualización diaria ERP.
+
+| Elemento auditado | Implementación y decisión requerida |
+| --- | --- |
+| 38 compromisos de PROYEC | Movimientos manuales nativos con fecha, importe, tipo, categoría y cuenta. Adoptar, conservar un registro existente o dejar pendiente. |
+| 5 colocaciones propuestas de INVERSIONES | Egresos planificados por cuenta, sin ejecución, rentabilidad ni vencimiento presumidos. |
+| 6 rescates de COLOCACIONES | Decisiones sobre una posición ERP elegida expresamente; cuenta receptora de BASE, distinta del banco del fondo. |
+| 6 políticas de cobranza por cliente | Vencimiento + 5 días naturales y cuenta receptora, aplicables a próximas facturas. Se confirman por código de cliente presente en ERP. |
+| 48 referencias de facturas | Revisión de cuenta y de las 6 excepciones explícitas de fecha. No crean facturas ni duplican sus importes. |
+| Fórmulas de fecha sin excepción | Permanecen como reglas; no se copia la fecha calculada como un ajuste fijo. |
+| Importes manuales futuros | Permanecen como decisiones editables. No se deducen nuevas recurrencias de importes repetidos. La agenda conserva sus recurrencias semanales/mensuales explícitas. |
+
+En **Planificación y reglas → Revisar transición del plan**, cada referencia empieza pendiente. Las opciones son crear, vincular conservando valores, o adoptar explícitamente los valores de la referencia sobre un registro existente. La revisión muestra ambos lados y requiere decidir conservar o retirar los compromisos anteriores sin correspondencia. Retirar cancela solo el pendiente; no indica que haya sido pagado y no borra ejecuciones.
+
+La identidad de una referencia incluye su versión y origen. **Una fila de octubre nunca se empareja automáticamente con la misma fila de septiembre.** Las sugerencias por fecha/importe son solo ayudas. Una identidad incorporada, editada, cancelada o eliminada permanece reconocida en posteriores revisiones y cargas ERP. Se impide usar un registro para dos referencias de esta versión. Las proyecciones vinculadas a documentos deben desvincularse antes de sustituir sus valores o retirar su pendiente.
+
+Adoptar valores de un compromiso reemplaza su fecha operativa, importe, cuenta, descripción y categoría; conserva estado, ejecución, comentarios, adjuntos e identidad de recurrencia. La fecha confirmada de su agenda se libera para que no oculte la nueva fecha adoptada. Conservar mantiene todos esos valores. Las operaciones son atómicas, requieren rol autorizado/MFA y rechazan revisiones desactualizadas.
+
+### Cobranza y correspondencias incompletas
+
+Las políticas por cliente pueden incorporarse independientemente de que las facturas de octubre aún no aparezcan en el ERP disponible. No sustituyen automáticamente reglas configuradas: hay que conservar o adoptar la decisión, y la adopción explícita asigna una prioridad superior a las reglas actuales. Las excepciones por factura siguen prevaleciendo.
+
+Una referencia de factura exige coincidencia de empresa, código de cliente, documento, importe, moneda, emisión y vencimiento. Si hay varios destinos, deben revisarse sus identificadores y filas ERP. Sin coincidencia, queda pendiente; no se marca cobrada por ausencia.
+
+La lectura del ERP de septiembre confirmó los códigos de cinco clientes. **COPEC requiere revisión:** CAJA indica RUT `0099520000-5` (referencia `C995200005`), mientras ese ERP contiene `C995200007`, `COPEC S.A.`. Este patch no equipara esos códigos por semejanza del nombre. La política y facturas de esa referencia no se asignan al otro código automáticamente. Puede configurarse una política nativa para el cliente correcto una vez aclarada la identidad.
+
+### Colocaciones, rescates y cálculo
+
+**Planificación → Colocaciones propuestas** permite crear, editar, cancelar y registrar ejecución de las colocaciones; también están en Proyecciones. La cuenta es explícita por código y moneda. Se elimina la elección arbitraria de la primera cuenta cuando varias comparten nombre de banco.
+
+En un rescate guardado, **Editar → Ver o registrar ejecución guardada** abre la asignación contra cargos ERP. Compromisos y colocaciones utilizan el mismo control contra sus movimientos compatibles. Cada operación conserva importe original, asignaciones y pendiente; las reservas de rescate consumen solo el importe pendiente. Un movimiento no puede asignarse en exceso entre rescates y otros compromisos. Las asignaciones no crean otro movimiento real ni alteran el capital ERP.
+
+Una ejecución completa elimina el evento futuro sin borrar su evidencia. Retirar una asignación vuelve a calcular el pendiente; cambiar manualmente el estado no demuestra una ejecución. Los estados «Ejecutado» anteriores sin asignaciones se conservan y se señalan para revisión. No pueden borrarse decisiones con asignaciones ni cambiar sus cuentas, monedas o posiciones sin retirarlas primero; el importe no puede quedar por debajo de lo ejecutado.
+
+Resumen y Flujo muestran, en total y por cuenta:
+
+`Saldo real + ingresos pendientes − pagos pendientes sin colocaciones = caja prevista antes de colocar`
+
+`Caja prevista antes de colocar − colocaciones pendientes = liquidez prevista tras colocaciones`
+
+Las colocaciones ya están incluidas una vez en los egresos del motor. El desglose no realiza una segunda resta. Los reportes contienen el mismo puente y el detalle diario. La apertura siguiente parte de la liquidez final prevista. Se mantienen monedas y fechas originales y la política de vencidos del patch 1.
+
+### Aplicación
+
+Desde la raíz de la rama indicada, con el patch 1 ya instalado:
+
+```bash
+git apply ~/Downloads/sonacol-planificacion-operativa.patch
+pbcopy < supabase/migrations/20261012010000000_planning_operations.sql
+```
+
+Ejecuta el primer SQL una sola vez en el editor de Supabase. Después copia y ejecuta el segundo:
+
+```bash
+pbcopy < supabase/migrations/20261012020000000_october_plan_review.sql
+```
+
+Actualiza el frontend mediante tu procedimiento habitual y recarga la aplicación. Selecciona la última carga ERP y abre la revisión del plan. No reapliques migraciones anteriores ni cambies la fecha ERP para simular datos de octubre.
+
+### Límites y controles pendientes
+
+La auditoría de Excel distingue: caja real CLP **2.172.083.343**, rescate del día **852.295.153**, pagos manuales **137.593.005**, caja antes de colocar **2.886.785.491**, propuestas de colocación **2.877.900.000**, liquidez restante **8.885.491**. Son cifras del archivo de referencia, no resultados ejecutados de esta entrega. La ERP disponible es de otro corte; no se garantiza esa equivalencia en la instalación.
+
+Las celdas auxiliares de vencimiento/rentabilidad de INVERSIONES estaban desactualizadas respecto del 09/10; no se utilizan para inventar nuevos rescates o intereses. Las 6 partidas de COLOCACIONES comparten la cuenta contable `511030001`: el ERP no aporta por sí solo identidad de fondo/tramo. La asignación y el límite de capital se revisan en la plataforma.
+
+Pendiente de verificación en ejecución: instalación sobre la base vigente, adopción atómica e idempotente, edición y preservación de decisiones, cuentas y monedas, ejecuciones compartidas/parciales/completas, arrastre a nuevas cargas, vistas móviles y conservación de previsiones congeladas. Se agregan casos en `tests/planning-operations.test.ts`, sin ejecutarlos. El control más amplio de cobertura/reimportación y la comprobación independiente de equivalencia al mismo corte siguen correspondiendo a los patches 3 y 4.
