@@ -3572,6 +3572,7 @@ export type Database = {
       }
       daily_base_batches: {
         Row: {
+          projection_engine_version: string
           created_at: string
           cutoff: string
           duplicate_records: number
@@ -3589,6 +3590,7 @@ export type Database = {
           warning_records: number
         }
         Insert: {
+          projection_engine_version?: string
           created_at?: string
           cutoff: string
           duplicate_records?: number
@@ -3606,6 +3608,7 @@ export type Database = {
           warning_records?: number
         }
         Update: {
+          projection_engine_version?: string
           created_at?: string
           cutoff?: string
           duplicate_records?: number

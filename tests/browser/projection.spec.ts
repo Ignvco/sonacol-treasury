@@ -170,7 +170,7 @@ test("Configuration selects one BASE globally, keeps history on reload, and late
       .selectOption(b.id);
     await expect(
       page.getByRole("button", { name: "Fecha de trabajo" }),
-    ).toContainText(/18 sept/);
+    ).toContainText(/18[\s-]sept/);
     await page.goto("/dashboard");
     await expectClosing(page, "1.100");
     await page.reload();

@@ -22,12 +22,36 @@ export function erpWorkbook() {
   return wb;
 }
 export const erpContext = { ERP: { company: "TEST", localCurrency: "CLP", cutoffDate: "2026-09-10", periodStart: "2026-09-01", investmentPeriodStart: "2026-09-01" } };
+/** Separate opening source, including an account with no period movements. */
+export function erpWithBankBalances() {
+  const wb = erpWorkbook();
+  const header = XLSX.utils.sheet_to_json(wb.Sheets.BANCOS, { header: 1 })[0];
+  wb.Sheets.BANCOS = XLSX.utils.aoa_to_sheet([
+    header as unknown[],
+    ["02/09/2026", "02/09/2026", "Primario", "JE 01", null, 100, "BANK-01", "ABONO transferencia", null, "CLP 200.000"],
+    ["03/09/2026", "03/09/2026", "Primario", "RC 02", null, 101, "BANK-01", "Cobro", "CLP 500.000"],
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    [], ["Cuenta asociada", "Banco", "Saldo Inicial"],
+    ["BANK-01", "Banco de prueba", 1000000], ["BANK-02", "Banco sin movimientos", 500],
+    [], [null, null, "saldo final = saldo inicial + (cargo - abono)"],
+  ]), "SALDOS BANCOS");
+  return wb;
+}
 export function erpWithoutInvestmentOpening(firstDate = "02/09/2026") {
   const wb = erpWorkbook(), sheet = wb.Sheets.COLOCACIONES;
   for (const address of Object.keys(sheet)) if (/^[A-Z]+2$/.test(address)) delete sheet[address];
   sheet.A3 = { t: "s", v: firstDate };
   return wb;
 }
-export function workbookBytes(wb = erpWorkbook()): ArrayBuffer {
-  return XLSX.write(wb, { type: "array", bookType: "xlsx" });
+export function renamedErpWorkbook(wb = erpWorkbook()) {
+  const names: Record<string, string> = { BANCOS: "BANCO", CLIENTES: "Cuentas por cobrar", COLOCACIONES: "Mayor inversiones" };
+  for (const [original, name] of Object.entries(names)) {
+    wb.Sheets[name] = wb.Sheets[original]; delete wb.Sheets[original];
+    wb.SheetNames[wb.SheetNames.indexOf(original)] = name;
+  }
+  return wb;
+}
+export function workbookBytes(wb = erpWorkbook(), bookType: "xlsx" | "xlsm" | "xls" = "xlsx"): ArrayBuffer {
+  return XLSX.write(wb, { type: "array", bookType });
 }

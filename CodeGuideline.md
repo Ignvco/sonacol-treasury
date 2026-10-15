@@ -27,14 +27,55 @@ project-root/
 
 ## Directory Responsibilities
 
+- **supabase/migrations/20261014000000000_monthly_incremental_erp.sql**: Monthly opening validation and append-only banking import identities with audited results; retains historical source rows and operational relationships.
+- **src/pages/importations/ErpIncrementalSummary.tsx**: Server-confirmed import counts, retained postings, blocking differences and monthly account controls in preview and results.
+- **tests/erp-monthly-incremental.test.ts**: Monthly date contract, banking idempotence, partial updates, source ambiguity, reconciliation/execution preservation, rollback and BIFF maturity regressions.
+- **config/locales-plugin.ts**, **src/types/virtual-locales.d.ts**: Typed Vite virtual module bundling canonical public translations synchronously; watches locale changes without importing public assets as JavaScript.
+- **tests/locales.test.ts**: Loads the canonical translations through real Vite dev/build pipelines and checks all keys with i18next language switching.
+- **tests/browser/erp-incremental.spec.ts**: Browser acceptance for monthly refresh counts, retained expenses, correction blockers, mobile layout and translated navigation.
+- **docs/erp-monthly-incremental.md**: Current monthly ERP contract, real-file audit, migration instructions, validation results and unresolved source differences.
+
+- **src/pages/help/index.tsx**, **src/pages/help/chapters.ts**: Independent, searchable Spanish user guide with a chapter index and links to existing modules. No operational data writes, onboarding overlays or new dependencies.
+- **docs/ui-refinement.md**: Visual audit, scope and validation record for the presentation-only refinement.
+- **tests/browser/help.spec.ts**: Guide search/navigation and all-route desktop/mobile presentation checks using an isolated database.
+
+- **supabase/migrations/20261013010000000_daily_openings_maturities.sql**: Historical daily-opening contract and source maturity evidence. The monthly migration supersedes its opening validation; retain both migration files and historical data.
+- **src/components/treasury/InvestmentMaturities.tsx**: Native-currency ERP maturity ledger, cutoff-relative alerts, authorized export and shared source evidence for investments/rescue planning. Does not allocate withdrawals to invented lots.
+
+- **src/financial-engine/cash-equivalence.ts**: Optional same-cut, single-currency closure comparison against independently declared reference totals; validates the reference equations and bank control without mutating operational data.
+- **src/components/treasury/CashEquivalence.tsx**: Shared session-only reference form in CashPosition, with explicit scope confirmation, visible differences and authorized CSV export. No database migration or recurring CAJA input.
+
+- **supabase/migrations/20261012010000000_planning_operations.sql**: Evidence-backed partial redemptions, shared bank allocation limits, explicit manual bank accounts and forward preservation of operations.
+- **supabase/migrations/20261012020000000_october_plan_review.sql**: Private October reference catalog and atomic, explicit adoption preserving identities, edits, cancellations and source evidence.
+- **src/services/planReviewService.ts**, **src/pages/planning/PlanReview.tsx**, **src/pages/planning/PlanReviewRows.tsx**: Reviewed transition of commitments, placements, redemptions and collection accounts into native planning; no recurring workbook dependency.
+- **src/pages/planning/Placements.tsx**: Native planned investment outflows, editable alongside commitments, with bank execution evidence and pending liquidity.
+- **tests/planning-operations.test.ts**: Placement liquidity, partial rescue allocation, shared posting limits, carry and read-only reference adoption cases, delivered without execution.
+- **supabase/migrations/20261012000000000_cash_position.sql**: Batch-scoped projection policy; activates cutoff-day planning for the current and subsequent ERP loads while preserving older batches and saved forecasts.
+- **src/components/treasury/CashPosition.tsx**: Shared cutoff cash bridge, with separate real cash, pending income/expense and projected closing, and source drill-downs in Resumen and Flujo.
+- **tests/cash-position.test.ts**: Cutoff-day planning, partial execution, receiving accounts, daily aggregation and saved-policy regression cases; this patch delivers the cases without executing them.
+- **supabase/migrations/20260928000000000_initial_business_plan.sql**: Reviewed SONACOL planning bootstrap with preserved source evidence, duplicate/conflict control, and partial execution against bank postings; original ERP rows and earlier snapshots remain unchanged.
+- **src/services/initialPlanService.ts**: Explicit bank allocation service for manual commitments, placements and redemptions. The former September-only `InitialPlan.tsx` was replaced by the reviewed October transition.
+- **src/pages/projections/ManualExecutionDialog.tsx**: Explicit allocation and reversal of a bank posting against a planned commitment, with remaining-amount and concurrency controls.
+- **src/financial-engine/bank-activity.ts**: Registered ERP income/expense and daily bank cash, excluding openings from period flows and keeping past postings out of forecasts.
+- **src/components/treasury/BankActivity.tsx**: Shared registered-cash summary and daily/source drill-down in Resumen and Flujo de caja, using their selected snapshot, bank and currency.
+- **tests/cashflow-activity.test.ts**, **tests/browser/cashflow-activity.spec.ts**: Actual expenses versus future commitments, exact daily/weekly/monthly balances, minimum-date and empty-flow regressions.
+- **tests/erp-bank-balances.test.ts**, **tests/browser/erp-bank-balances.spec.ts**: Separate bank opening accounts, Cargo/Abono signs, reported closing controls, installed database upgrade and shared cash totals through the browser and financial consumers.
+- **src/import-engine/erp-bank-balances.ts**: Reads SALDOS BANCOS opening accounts and optional reported closing balances, preserving cells and keeping openings out of period income.
+- **src/financial-engine/bank-control.ts**: Signed ERP bank validation and per-account opening + Cargo − Abono controls; missing reported balances remain unknown.
+- **src/components/treasury/BankControlTable.tsx**: Per-account balances, period income/expense and explicit missing/differing closing references in import preview and Banks.
+- **supabase/migrations/20260927000000000_erp_bank_balances.sql**: Independent SQL bank controls, separate opening/movement sources, account coverage and optional reported balance reconciliation; no historical rewrite.
+- **supabase/migrations/20260926050000000_erp_report_sheet_names.sql**: Accepts original ERP worksheet names independently of report roles, preserving provenance, unique report mapping and existing financial validation.
+- **supabase/migrations/20260926040000000_erp_native_operations.sql**: Versioned SONACOL operating rules initialized from ERP alone, editable classifications and explicit activation for existing installations; preserves prior configuration and historical snapshots.
+- **tests/erp-native-operations.test.ts**: Acceptance from an empty database using only ERP, native rules, customer bank configuration, manual payments, rescues, daily balances, reimports and frozen history.
 - **supabase/migrations/20260926030000000_caja_business_migration.sql**: Durable legacy evidence, atomic reviewed bindings (including MANUAL links) and optimistic preview/adoption of collection formulas.
 - **src/pages/planning/DecisionEvidence.tsx**: CAJA source and ERP target side-by-side for reviewing a correspondence; evidence survives removal of its original batch.
 - **src/pages/planning/CollectionPolicyDialog.tsx**: Review and adopt customer collection policies while retaining explicit dates and prior user edits.
 - **src/financial-engine/migration-comparison.ts**: Same-cut and same-currency daily reconciliation using the existing treasury engine, with cash coverage checks and event differences traced through reviewed bindings.
-- **src/pages/planning/MigrationComparison.tsx**: Read-only CAJA reference selector, daily balances and explanatory movements within Planning.
+- **src/pages/changes/index.tsx**, **src/pages/changes/MigrationComparison.tsx**: Snapshot differences and optional historical CAJA migration checks, separated from daily operation.
+- **src/pages/planning/OperatingRules.tsx**: Native operating configuration, real missing bank/classification inputs and links to manual commitments, daily forecasts and reports; does not require CAJA.
 - **tests/caja-migration.test.ts**, **tests/helpers/caja-migration.ts**: Anonymous CAJA-to-ERP fixtures and installed-version upgrade, binding/link, policy, deletion, reimport and daily comparison acceptance checks.
 - **tests/browser/caja-migration.spec.ts**: Production-build acceptance for reviewing ambiguous matches, applying formula policy and comparing daily results on desktop/mobile.
-- **src/import-engine/erp-profile.ts**: Versioned raw ERP report headers and sheet detection.
+- **src/import-engine/erp-profile.ts**: Versioned raw ERP headers and report detection by complete schema, independently of physical worksheet names.
 - **src/import-engine/erp.ts**: ERP cells, openings, movements, invoices and investment ledger validation; preserves original coordinates and repeated lines. Business planning is separate from this reader.
 - **tests/helpers/erp-workbook.ts**: Anonymous raw ERP workbook fixtures. `erp-import.test.ts` checks parsing and `erp-database.test.ts` checks atomic persistence and preserved manual work against PostgreSQL.
 - **src/pages/importations/ErpImportContext.tsx**: Declared company, local currency, cutoff and separate bank/investment reporting periods for raw ERP imports.
@@ -134,6 +175,11 @@ Whenever a new module (such as a component, hook, or utility) or a new page is a
 - **Documentation:**  
   - Add comments for complex logic.
   - Document the purpose of each module at the top of the file if not obvious.
+
+## ERP refresh review (patch 3)
+
+- `src/pages/importations/ErpRefreshReview.tsx` presents incoming account coverage and execution conflicts without matching by amounts.
+- `20261013000000000_erp_refresh_review.sql` wraps the existing comparison/import RPCs, enforcing the same review under the import transaction lock. The helper is private; no new public data endpoint or dependencies.
 
 ## Example: Adding a New "Profile" Page
 

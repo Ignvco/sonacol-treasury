@@ -69,7 +69,7 @@ export function ResumenLiquidityCard({
           className="rounded-xl px-2 py-1 text-left transition-colors hover:bg-card/60"
         >
           <span className="block text-[10px] uppercase tracking-wide text-brand-dark/50">
-            Mínimo proyectado
+            Mínimo desde el corte
           </span>
           <span className="block text-[13px] font-semibold tabular-nums text-brand-dark">
             {minimumText}

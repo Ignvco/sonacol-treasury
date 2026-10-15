@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 const Assistant = lazy(() => import("./pages/Assistant"));
 const Today = lazy(() => import("./pages/Today"));
-const Changes = lazy(() => import("./pages/Changes"));
+const Changes = lazy(() => import("./pages/changes"));
 const Scenarios = lazy(() => import("./pages/Scenarios"));
 const Accuracy = lazy(() => import("./pages/Accuracy"));
 const Security = lazy(() => import("./pages/Security"));
@@ -21,6 +21,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Importations = lazy(() => import("./pages/Importations"));
 const Integrations = lazy(() => import("./pages/Integrations"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Help = lazy(() => import("./pages/help"));
 
 export const routers = [
   {
@@ -32,6 +33,7 @@ export const routers = [
     path: "/",
     element: <AppLayout />,
     children: [
+      { path: "help", name: "Guía de usuario", element: <Help /> },
       { index: true, element: <Navigate to="/today" replace /> },
       { path: "today", element: <Today /> },
       { path: "changes", element: <Changes /> },

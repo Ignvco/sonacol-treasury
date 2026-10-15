@@ -1,6 +1,6 @@
 # SONACOL Treasury — manual del proyecto
 
-Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **26 de septiembre de 2026** para **ERP crudo v1 + segunda etapa de migración CAJA**, manteniendo la compatibilidad con **SONACOL BASE v1**. Repositorio: [Ignvco/sonacol-treasury](https://github.com/Ignvco/sonacol-treasury). Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
+Documento único de funcionamiento, arquitectura, instalación, base de datos, operación, pruebas y mantenimiento. Actualizado el **27 de septiembre de 2026** para **operación nativa desde ERP + reglas propias de tesorería**, manteniendo la compatibilidad con **SONACOL BASE v1**. Repositorio: [Ignvco/sonacol-treasury](https://github.com/Ignvco/sonacol-treasury). Describe el código revisado; no certifica por sí solo qué versión está desplegada en el servidor.
 
 ## Índice
 
@@ -30,12 +30,18 @@ Documento único de funcionamiento, arquitectura, instalación, base de datos, o
 24. [Nuevos objetos y referencias técnicas](#24-nuevos-objetos-y-referencias-técnicas)
 25. [Activar ERP y planificación](#25-activar-erp-y-planificación)
 26. [Segunda etapa: decisiones CAJA](#26-segunda-etapa-decisiones-caja)
+27. [Operación nativa sin Excel CAJA](#27-operación-nativa-sin-excel-caja)
+28. [Patch: actualización ERP y formularios](#28-patch-actualización-erp-y-formularios)
+29. [Patch: saldos bancarios desde ERP](#29-patch-saldos-bancarios-desde-erp)
+30. [Patch: egresos en Resumen y Flujo](#30-patch-egresos-en-resumen-y-flujo)
 
 ## 1. Objetivo y reglas del negocio
 
 Aplicación interna de tesorería para consultar caja, cuentas por cobrar, inversiones y proyecciones, con información diaria procedente de SAP Business One y ajustes manuales del equipo.
 
 **ERP.xlsm es materia prima; CAJA es el sistema financiero manual que la plataforma reemplaza progresivamente.** ERP no tiene que contener BASE, MANUAL, proyecciones ni cálculos auxiliares. La aplicación separa datos importados, decisiones del usuario y resultados calculados.
+
+**Criterio de aceptación obligatorio: una instalación vacía debe operar importando únicamente ERP.xlsm.** Las reglas, clasificaciones, movimientos manuales, compromisos, rescates y proyecciones pertenecen a la plataforma. El Excel CAJA es una referencia de desarrollo y, opcionalmente, un respaldo histórico; su carga, actualización o mantenimiento no forma parte del trabajo diario. La sección 27 corrige el enfoque de las entregas anteriores, demasiado centrado en trasladar decisiones desde un libro trabajado.
 
 | Elemento identificado en CAJA | Destino en la plataforma | Alcance de esta etapa |
 | --- | --- | --- |
@@ -44,7 +50,7 @@ Aplicación interna de tesorería para consultar caja, cuentas por cobrar, inver
 | Datos ingresados manualmente | `daily_manual` / Proyecciones | Se mantienen al importar ERP |
 | Datos modificados por el usuario | `treasury_business_decisions` / Planificación | Fecha prevista, clasificación, cuenta receptora y observaciones; original conservado |
 | Proyecciones | Reglas, movimientos manuales y rescates programados | Fechas de cobro y rescates parciales; escenarios existentes |
-| Reglas de negocio | Reglas versionadas en Planificación | Desplazamiento de vencimiento y clasificación por descripción; las demás reglas requieren validación progresiva |
+| Reglas de negocio | Reglas versionadas en Planificación | Inicio desde ERP: +5 días naturales y clasificación ordenada; condiciones por cliente y excepciones editables |
 | Cálculos auxiliares | Funciones del lector y del motor | Cargo menos abono, apertura, acumulados y capital reservado; no se copian hojas auxiliares |
 | Información histórica | Lotes, decisiones por lote y previsiones congeladas | Consultable sin incorporar decisiones de fechas futuras |
 
@@ -145,8 +151,8 @@ El cliente incluye la conexión pública original como alternativa cuando las va
 | `/login` | Autenticación; aprobación y MFA se comprueban antes de abrir la app |
 | `/` | Hoy: caja, riesgo, antigüedad del ERP, cambio de caja y tareas con responsable |
 | `/dashboard` | Resumen de caja y saldo previsto de la misma serie diaria que Flujo de caja |
-| `/changes` | Comparación de dos BASE: altas, bajas, cambios y explicación de caja |
-| `/planning` | Correspondencias CAJA, fechas de cobro, reglas, rescates parciales y comparación diaria con referencia CAJA |
+| `/changes` | Comparación de fotografías: altas, bajas y explicación de caja; control histórico opcional de migración |
+| `/planning` | Configuración nativa de cobranza y clasificación, decisiones operativas y rescates parciales |
 | `/scenarios` | Laboratorio de fechas, importes y exclusiones; escenarios guardados |
 | `/accuracy` | Previsiones congeladas frente a saldos BANCO observados posteriormente |
 | `/assistant` | Consultas verificables sobre caja, riesgo, cobros, egresos y cambios |
@@ -172,7 +178,7 @@ La búsqueda global (botón de lupa o Ctrl/⌘ K) recorre documentos, clientes, 
 ### ERP crudo: operación
 
 1. Selecciona ERP.xlsm con las hojas **BANCOS, CLIENTES y COLOCACIONES**. El perfil valida los encabezados conocidos y acepta columnas reordenadas. Un libro con BASE utiliza el perfil CAJA; no se mezclan ambos contratos.
-2. Declara empresa, moneda local, fecha de corte e inicio de **cada** mayor. El período de bancos puede diferir del período de inversiones. La apertura corresponde al día anterior al inicio de su mayor; la última transacción no acredita la fecha de extracción.
+2. Declara empresa, moneda local, fecha de corte e inicio de **cada** mayor. Con SALDOS BANCOS, el inicio bancario es el primer día del mes del corte y la apertura es el cierre del mes anterior. El mayor de inversiones conserva su propio período. La última transacción no acredita la fecha de extracción. Véase el contrato mensual vigente en la sección 37.
 3. Pulsa **Aplicar cobertura y comparar**. Revisa coordenadas hoja/fila, aperturas, movimientos, monedas ausentes y cambios. Modificar el contexto exige comparar otra vez.
 4. Confirma el conjunto completo. Una inconsistencia de estructura, fecha, importe o saldo acumulado impide reemplazar los datos aceptados.
 5. Abre **Planificación y reglas** para gestionar cobros, clasificaciones y rescates. Los movimientos adicionales siguen en **Proyecciones**.
@@ -402,6 +408,9 @@ Las importaciones y las modificaciones MANUAL usan transacciones y control de re
 | `20260926010000000_business_planning.sql` | Decisiones versionadas, reglas, posiciones, rescates y composición de consultas |
 | `20260926020000000_erp_investment_opening.sql` | Apertura de inversión calculada cuando falta OB; validación de acumulados por cuenta y trazabilidad |
 | `20260926030000000_caja_business_migration.sql` | Evidencia CAJA conservada, correspondencias con vínculos MANUAL y adopción revisada de reglas de cobranza |
+| `20260926040000000_erp_native_operations.sql` | Reglas propias SONACOL desde ERP, clasificación completa y activación para instalaciones existentes |
+| `20260926050000000_erp_report_sheet_names.sql` | Identidad de reportes ERP independiente del nombre de pestaña; conserva nombres y coordenadas originales |
+| `20260927000000000_erp_bank_balances.sql` | Aperturas desde SALDOS BANCOS, vínculo por cuenta/período y control independiente inicial + Cargo − Abono |
 
 **La limpieza de archivos de documentación no requiere ejecutar SQL.** La opción Eliminar Excel sí requiere la migración del 18 de septiembre si todavía no está aplicada. No repitas migraciones ya instaladas. Algunas crean objetos una sola vez y los archivos `cleanup_*` contienen borrados: conservarlos no significa volver a ejecutarlos sobre datos reales.
 
@@ -656,9 +665,10 @@ Git permite recuperar código; no respalda los datos de Supabase. Consulta el pr
 | --- | --- |
 | Implementado | ERP crudo de tres hojas y CAJA/BASE, historial, originales de solo lectura, MANUAL y decisiones versionadas |
 | Implementado | Fechas previstas de cobro, clasificación, posiciones de inversión y reservas para rescates parciales |
-| Pendiente de aceptación | Aplicar las migraciones pendientes del 26/09 en el entorno destino y revisar decisiones iniciales contra CAJA |
+| Pendiente de instalación | Aplicar las migraciones pendientes del 26/09 en el entorno destino y validar la operación desde ERP |
 | Implementado, segunda etapa | Origen CAJA conservado, revisión de correspondencias, adopción de cobranza con excepciones y comparación diaria |
-| Migración progresiva | Resolver los casos concretos pendientes; validar otras reglas de CAJA antes de automatizarlas |
+| Operación nativa | Importar ERP en una instalación vacía activa reglas iniciales propias; el usuario mantiene sus decisiones en la plataforma |
+| Migración progresiva | Incorporar otras reglas de negocio verificadas como lógica/configuración de plataforma; no como nuevos requisitos del Excel de entrada |
 | Implementado | Plantilla de lectura SONACOL BASE v1 visible en Configuración y vista previa; validación de estructura con filas variables |
 | Implementado | Hoy, tareas, diferencias, escenarios aislados, previsiones congeladas y precisión observada |
 | Implementado | Agenda semanal/mensual, recurrencias, excepciones, comentarios y adjuntos |
@@ -944,15 +954,15 @@ npx --yes pnpm@11.19.0 build
 
 ### Revisar correspondencias
 
-En **Planificación y reglas → Correspondencias pendientes**, abre una decisión. La pantalla muestra cliente, documento, importe, vencimiento, fechas CAJA, banco, cuenta y coordenada de origen junto al destino ERP. Selecciona el destino y confirma que revisaste la correspondencia. Una coincidencia de monto no acredita identidad; un folio distinto permanece visible como advertencia.
+En **Planificación y reglas → Decisiones por revisar**, abre una decisión. La pantalla muestra cliente, documento, importe, vencimiento, fechas CAJA, banco, cuenta y coordenada de origen junto al destino ERP. Selecciona el destino y confirma que revisaste la correspondencia. Una coincidencia de monto no acredita identidad; un folio distinto permanece visible como advertencia.
 
 La asociación se guarda por identidad ERP y se conserva en las siguientes cargas del mismo corte o posteriores. Al reasignar una factura, sus vínculos MANUAL se trasladan en la misma transacción. Un destino ocupado se rechaza; los enlaces con importes incompatibles siguen fuera de la proyección hasta corregirse. Los rescates requieren posición, monto, moneda, fecha y cuenta receptora, y mantienen el control de capital reservado. No se deduce pago o ejecución por ausencia del registro.
 
 `source_json` conserva la evidencia normalizada original y la referencia de archivo/fila. Al actualizar una instalación de etapa 1 se recupera desde el lote CAJA, si aún existe. Después, esa evidencia sobrevive a la eliminación del lote fuente y al arrastre diario. Si el origen se eliminó antes de instalar esta migración, la pantalla indica que falta la evidencia: no se reconstruye inventándola.
 
-### Adoptar cobranza CAJA
+### Configurar cobranza y recuperar decisiones iniciales
 
-**Adoptar cobranza CAJA** permite seleccionar un cliente por su código ERP, días naturales desde el vencimiento, prioridad y cuenta receptora. El punto de partida observado en CAJA es **+5 días naturales**; no se introducen ajustes de fines de semana o feriados. Los bancos observados en las correspondencias se muestran como referencia; la cuenta se selecciona explícitamente por su código bancario.
+**Configurar cobranzas** permite seleccionar un cliente por su código ERP, días naturales desde el vencimiento, prioridad y cuenta receptora. El punto de partida observado en CAJA es **+5 días naturales**; no se introducen ajustes de fines de semana o feriados. Los bancos observados en las correspondencias se muestran como referencia; la cuenta se selecciona explícitamente por su código bancario.
 
 1. Pulsa **Revisar impacto** para ver facturas alcanzadas, fechas calculadas que seguirán la regla y fechas explícitas que se preservarán.
 2. Pulsa **Aplicar regla revisada**. Si cambió la planificación durante la revisión, debes generar una vista previa nueva.
@@ -960,21 +970,494 @@ La asociación se guarda por identidad ERP y se conserva en las siguientes carga
 
 Solo se libera la fecha de un ajuste inicial **sin ediciones**, con correspondencia vigente, sin AJ VCTO manual y cuyo VCTO/fecha calculada coincide exactamente con vencimiento +5. Se preservan fechas manuales, excepciones, decisiones ya editadas y casos sin correspondencia. Para hacer que una decisión revisada siga una regla, edita su fecha prevista y déjala vacía. La evidencia CAJA se conserva.
 
-La prioridad mayor se aplica al final; los ajustes explícitos siguen prevaleciendo. La adopción rechaza otra regla de cobranza de igual o mayor prioridad que afecte ese alcance: puedes editar la existente o elegir una prioridad mayor. Las reglas de clasificación por descripción siguen disponibles en **Crear regla**; no se instalan automáticamente catálogos o condiciones que aún requieren validación.
+La prioridad mayor se aplica al final; los ajustes explícitos siguen prevaleciendo. La adopción rechaza otra regla de cobranza de igual o mayor prioridad que afecte ese alcance: puedes editar la existente o elegir una prioridad mayor. Las reglas de clasificación por descripción siguen disponibles en **Crear regla**. La sección 27 incorpora las reglas iniciales verificadas; las condiciones adicionales requieren validación.
 
 ### Comparar la proyección diaria
 
-En **Comparación diaria con CAJA**, selecciona una carga CAJA trabajada y un horizonte de 30, 60 o 90 días. Ambos lados usan el motor financiero existente, la misma moneda original y el mismo corte. La pantalla no cambia el corte de una exportación para forzar una comparación.
+En **Explicar cambios → Control histórico de la migración (opcional) → Comparación diaria con CAJA**, selecciona una carga CAJA trabajada y un horizonte de 30, 60 o 90 días. Ambos lados usan el motor financiero existente, la misma moneda original y el mismo corte. La pantalla no cambia el corte de una exportación para forzar una comparación.
 
 - Cortes distintos, una carga parcial o saldos bancarios ausentes en la moneda elegida impiden la comparación.
 - Cuentas bancarias diferentes, decisiones pendientes y vínculos inválidos se señalan como revisiones pendientes.
 - La tabla muestra saldo CAJA, saldo plataforma y diferencias de saldo, cobros, rescates y MANUAL. Las diferencias se expresan como **plataforma menos CAJA**.
 - El detalle explica movimientos solo presentes en un lado y cambios de fecha, importe o banco. Las correspondencias guardadas permiten comparar entidades con identificadores distintos.
 
-Una coincidencia numérica al corte y moneda elegidos no certifica otras monedas, escenarios o reglas. Para retirar CAJA de la operación, deben resolverse las correspondencias pendientes y aceptarse la cobertura y las diferencias con una exportación realmente comparable.
+Una coincidencia numérica al corte y moneda elegidos no certifica otras monedas, escenarios o reglas. Este control permite revisar decisiones históricas trasladadas; no condiciona el inicio ni la continuidad de la operación desde ERP descrita en la sección 27.
 
 ### Verificación de la entrega
 
-La suite local de lógica y PostgreSQL aislado pasa **189 pruebas**, incluida la actualización sobre una etapa 1 con datos, la inmutabilidad ERP, preservación de fechas manuales, rechazo de revisiones obsoletas, permisos, vínculos sin doble conteo, evidencias tras eliminar el origen, reimportaciones e históricos congelados. La aceptación de navegador cubre correspondencias, adopción de reglas, comparación diaria, importación ERP y corte declarado en la compilación de producción.
+La entrega de esta segunda etapa pasó **189 pruebas** de lógica y PostgreSQL aislado, incluida la actualización sobre una etapa 1 con datos, la inmutabilidad ERP, preservación de fechas manuales, rechazo de revisiones obsoletas, permisos, vínculos sin doble conteo, evidencias tras eliminar el origen, reimportaciones e históricos congelados. La aceptación de navegador cubrió correspondencias, adopción de reglas, comparación diaria, importación ERP y corte declarado en la compilación de producción. La verificación de la corrección posterior figura en la sección 27.
 
 Los libros reales se leyeron sin modificarlos. La prueba de adopción se ejecutó en una base aislada y con un corte común **simulado únicamente para ejercitar el traslado**; no certifica igualdad de cobertura entre los archivos recibidos. Con los cortes distintos declarados para la comparación real, el comparador se bloquea correctamente. TypeScript, build y control estático de secretos se verifican; ESLint conserva cinco advertencias de Fast Refresh preexistentes, sin errores.
+
+## 27. Operación nativa sin Excel CAJA
+
+El objetivo es **reemplazar el sistema financiero manual CAJA**. La plataforma recibe ERP como materia prima, mantiene los datos de negocio del usuario y produce los cálculos, proyecciones diarias, caja disponible, dashboard e informes. No necesita un CAJA trabajado para arrancar ni para seguir operando. El código implementado se encuentra en `feat/erp-native-operations`, basado en la entrega de la sección 26.
+
+### Qué ejecuta la plataforma
+
+| Funcionalidad | Entrada | Implementación nativa |
+| --- | --- | --- |
+| Caja contable disponible | Aperturas y movimientos BANCOS | Suma con signo por cuenta y moneda hasta el corte |
+| Fecha prevista de cobro | Vencimiento contractual CLIENTES | Regla inicial de +5 días naturales; reglas por cliente; el ajuste explícito prevalece |
+| Cuenta receptora | Catálogo de cuentas BANCOS y decisión del usuario | Configurar cobranzas por código de cliente ERP y cuenta bancaria; se conserva en siguientes cargas |
+| Clasificación de movimientos | Descripción original BANCOS | Reglas propias ordenadas: la última coincidencia por prioridad prevalece; los casos restantes quedan Sin clasificar |
+| Compromisos, pagos y cobros adicionales | Entrada del usuario | Proyecciones/MANUAL, fechas, categorías, recurrencias, estados y observaciones |
+| Posiciones y rescates | Mayor COLOCACIONES + planificación del usuario | Capital real separado de rescates parciales, reservas y remanente; un estado ejecutado no inventa un abono bancario |
+| Proyección diaria | ERP + reglas + ajustes + MANUAL + rescates | Caja inicial + ingresos − egresos; eventos desde el día posterior al corte y tratamiento visible de vencidos |
+| Dashboard, reportes y escenarios | Modelo financiero compuesto | Consumen el mismo motor y contexto de corte/moneda |
+| Histórico | Fotografías y decisiones versionadas | Reimportación sin sumar fotografías ni modificar previsiones congeladas |
+
+La cuenta receptora, los compromisos y la programación de rescates son decisiones del negocio. Se introducen en la plataforma cuando no están en ERP. No se inventan importes, tasas o vencimientos de inversión ni se exige agregarlos a un Excel.
+
+### Reglas iniciales incorporadas
+
+Una nueva carga ERP con empresa **SONACOL** y sin configuración previa crea **16 reglas versionadas** dentro de la plataforma: una de cobranza y quince de clasificación. Son lógica ya verificada durante la auditoría; no se consulta ningún libro CAJA para ejecutarlas.
+
+| Orden de coincidencia | Texto de la descripción | Categoría |
+| --- | --- | --- |
+| 20–26 | ABASTIBLE, ENEX, ENAP, ESMAX, GASCO, TRADING, COPEC | Recaudación clientes |
+| 27 | RSCTE | Rescate de inversiones |
+| 28–30 | ABONO, SUBSIDIO, BCO.ITAU2 | Abonos bancarios |
+| 31 | COLOCACIONES | Colocaciones |
+| 32–33 | PAGO, CARGO | Cargos bancarios |
+| 34 | PAGO PAC | Pagos PAC |
+
+Estas categorías no cambian el signo o importe contable importado. Por ejemplo, PAGO PAC prevalece sobre PAGO; ABONO prevalece sobre una coincidencia anterior de cliente. Los movimientos sin coincidencia se muestran como Sin clasificar para crear una regla o ajuste propio.
+
+La regla general de cobranza tiene prioridad 0. Las condiciones por cliente y otras reglas pueden tener una prioridad mayor, y los ajustes explícitos siguen prevaleciendo. Las reglas iniciales pueden editarse o retirarse. Una nueva importación conserva toda la configuración, incluidas las reglas retiradas: nunca las reinstala sobre la decisión del usuario. Si una instalación ya tiene reglas propias de cobranza o clasificación, no se reemplaza ese tipo de reglas. Solo se incorpora el tipo todavía sin configurar; las retiradas también cuentan como configuración existente.
+
+Las importaciones históricas no heredan reglas de fechas futuras. Instalar la migración tampoco reescribe cálculos anteriores. Los datos heredados y sus correspondencias pueden conservarse como evidencia, pero no son una dependencia de esta operación.
+
+### Trabajo diario
+
+1. Importa **ERP.xlsm** y declara su corte y cobertura.
+2. En **Planificación y reglas**, revisa las reglas activas y utiliza **Configurar cobranzas** para definir condiciones por cliente y cuenta receptora. Las facturas nuevas del mismo cliente quedan incluidas automáticamente.
+3. Registra compromisos y pagos en **Proyecciones**; introduce excepciones de cobro o clasificaciones en Planificación y programa rescates cuando corresponda.
+4. Consulta **Flujo de caja**, dashboard, escenarios e informes. La plataforma calcula los resultados.
+5. Importa la siguiente exportación ERP. Se actualizan los hechos y se conservan las decisiones propias. Revisa conflictos concretos cuando cambie o falte un registro.
+
+El control de comparación con CAJA se encuentra exclusivamente en **Explicar cambios → Control histórico de la migración (opcional)**. Sirve para validar la reconstrucción durante el desarrollo; no aparece como paso de operación en Planificación ni exige mantener el Excel antiguo.
+
+### Actualizar esta corrección de enfoque
+
+Si ya instalaste las migraciones hasta `20260926030000000_caja_business_migration.sql`, conserva tus cambios locales, actualiza la rama y aplica **solamente** la migración nueva:
+
+```bash
+git fetch origin
+git switch feat/erp-native-operations
+git pull --ff-only origin feat/erp-native-operations
+pbcopy < supabase/migrations/20260926040000000_erp_native_operations.sql
+```
+
+Pega el SQL en el editor del proyecto Supabase correcto y actualiza el frontend mediante tu proceso habitual. No repitas migraciones previas. Si todavía no aplicaste alguna dependencia, sigue su orden en la sección 9.
+
+En una instalación existente con un ERP SONACOL ya aceptado y tipos de regla aún sin configurar, **Activar reglas iniciales** permite incorporarlos en el corte vigente sin reimportar un archivo. Requiere permiso de escritura y MFA. Si ya existen reglas de ambos tipos, continúa editándolas: el sistema respeta esa configuración. Una base vacía obtiene las reglas automáticamente en su primera carga ERP.
+
+### Criterio de validación
+
+La aceptación se realiza desde una base vacía y **sin cargar CAJA**: importar ERP, generar las fechas previstas, configurar banco/condiciones de un cliente, crear un ajuste, un pago manual y un rescate, verificar saldos diarios, congelar una previsión y reimportar ERP. Deben conservarse las decisiones y la previsión histórica, incluirse las facturas nuevas en las reglas y permanecer intactos los datos crudos. Este flujo tiene pruebas automáticas SQL y de navegador.
+
+La corrección pasa **192 pruebas de lógica/PostgreSQL aislado y 5 pruebas de navegador** sobre la compilación de producción, con revisión visual de escritorio y móvil. TypeScript y build pasan; ESLint no presenta errores y conserva cinco advertencias preexistentes. La comprobación aislada del ERP recibido, sin cargar CAJA, importó 289 filas originales, creó 16 reglas y generó fechas previstas para 92 facturas. Ocho movimientos quedaron explícitamente sin clasificar. Estas pruebas no aplican migraciones ni despliegan cambios en producción.
+
+Esta entrega incorpora la lógica identificada arriba y reutiliza los módulos nativos existentes. No declara implementadas reglas adicionales que aún no estén verificadas. Cualquier funcionalidad financiera pendiente debe completarse dentro de la plataforma; la respuesta no será volver a depender del archivo CAJA.
+
+## 28. Patch: actualización ERP y formularios
+
+Entrega incremental `sonacol-erp-actualizacion-formularios.patch`, preparada sobre `d2ba6a8bdc35c90997a94efb5f8c53e095e06dfa` (operación nativa ERP). A partir de esta entrega, los cambios se distribuyen mediante patches con su base identificada y sus comprobaciones.
+
+### Correcciones
+
+El lector dependía de los nombres exactos BANCOS, CLIENTES y COLOCACIONES. Un ERP sin BASE y con otra etiqueta, por ejemplo BANCO, terminaba en el lector anterior y pedía una hoja BASE. Ahora se identifican los tres reportes por sus encabezados completos dentro de las primeras 50 filas, conservando el nombre físico de cada pestaña y sus coordenadas. El tipo de reporte determina su período bancario o de inversiones, aunque cambie el nombre de la pestaña. Los libros históricos con BASE mantienen su lectura exclusiva de esa hoja.
+
+Se rechazan reportes incompletos, encabezados inválidos y varias hojas del mismo tipo. El mensaje indica los reportes no reconocidos y las hojas encontradas; no solicita convertir ERP en un CAJA trabajado. No se inventan datos de una hoja ausente. La validación SQL conserva controles de importes, períodos, identidad, permisos y correspondencia entre hoja y origen.
+
+El mismo nombre de archivo `ERP.xlsm` puede usarse para actualizar la información. Repetir el contenido y corte no duplica fotografías; cambiar solo los nombres de pestaña tampoco crea una nueva. Una actualización con nuevos datos o corte conserva las decisiones propias y el historial existente. Un archivo rechazado no reemplaza la carga vigente.
+
+Los formularios de ajuste, rescate y política de cobranza limitan el ancho de sus campos a la ventana. Las opciones largas ya no ensanchan la cuadrícula ni ocultan los botones. En pantallas pequeñas, los campos y acciones se distribuyen en varias filas y la ventana permite desplazamiento vertical.
+
+### Aplicar el patch
+
+Desde la carpeta del repositorio, con el archivo descargado en Descargas:
+
+```bash
+git apply --check ~/Downloads/sonacol-erp-actualizacion-formularios.patch
+git apply ~/Downloads/sonacol-erp-actualizacion-formularios.patch
+```
+
+La comprobación debe terminar sin errores. Si la base local difiere o hay cambios que se solapan, conserva ese trabajo y adapta el patch a esa versión; no fuerces su aplicación.
+
+Con las migraciones anteriores ya instaladas, ejecuta **solo** `supabase/migrations/20260926050000000_erp_report_sheet_names.sql` en el editor SQL del proyecto Supabase correspondiente. En macOS puedes copiar su contenido así:
+
+```bash
+pbcopy < supabase/migrations/20260926050000000_erp_report_sheet_names.sql
+```
+
+Después compila y publica el frontend con tu proceso habitual (`pnpm build`) y recarga la aplicación. La migración actualiza la validación; no elimina archivos, registros ni decisiones. No se han ejecutado migraciones ni despliegues en producción durante la preparación del patch.
+
+### Verificación
+
+Pruebas con datos anónimos: lectura de pestañas renombradas en XLSX/XLSM/XLS, períodos separados, actualización de una base ya instalada, identidad estable, conservación de ajustes/MANUAL/historial, rechazos y permisos. En navegador se carga repetidamente `ERP.xlsm`, se cambia de corte, se comprueba que los saldos no se acumulan y que un archivo incompleto conserva la carga vigente. Los formularios se revisan con etiquetas largas a 1366, 390 y 320 píxeles de ancho, incluyendo guardar un ajuste desde móvil.
+
+Resultado: **197 pruebas de lógica/PostgreSQL y 7 casos de navegador aprobados**, TypeScript y compilación correctos; ESLint sin errores y con las cinco advertencias preexistentes. El patch se comprueba además sobre una copia limpia de su commit base.
+
+## 29. Patch: saldos bancarios desde ERP
+
+`sonacol-erp-saldos-bancarios.patch` es incremental sobre la entrega de la sección 28 ya aplicada. No repite ese patch ni sustituye las migraciones previas. La base exacta del diff es el árbol Git `6f536632ddafaaba08dade3420e71d5f4843affb` (commit `d2ba6a8` más el patch de actualización ERP/formularios).
+
+### Lectura y diagnóstico
+
+La nueva hoja **SALDOS BANCOS** contiene `Cuenta asociada`, `Banco` y `Saldo Inicial`; el encabezado puede estar después de filas vacías y las columnas pueden cambiar de posición. Se conserva la hoja y fila original de cada apertura. El texto explicativo `saldo final = saldo inicial + (cargo - abono)` se reconoce como nota, no como un movimiento. Una cuenta sin movimientos conserva su apertura. El código de Cuenta asociada es una cuenta contable; no se presenta como número de cuenta bancaria.
+
+En la versión revisada, el lector ERP ya usaba **Cargo − Abono**. Los problemas comprobados eran otros: no reconocía SALDOS BANCOS y dependía de cabeceras `Activos` dentro de BANCOS; además, SQL exigía que cada apertura apareciera en una fila anterior del mayor. El nuevo archivo separa las fuentes. No se ha comprobado que el despliegue del usuario contuviera una suma `Cargo + Abono`.
+
+| Fuente | Datos importados | Uso en la plataforma |
+| --- | --- | --- |
+| SALDOS BANCOS | Cuenta, banco, saldo inicial | Una apertura por cuenta/moneda y período declarado |
+| BANCOS | Cuenta asociada, fecha, Cargo (ML), Abono (ML), documento y transacción | Cargo es ingreso; Abono es egreso; movimiento con signo = Cargo − Abono |
+| CLIENTES | Facturas y vencimientos contractuales | Cobros futuros según reglas/decisiones, sin duplicar caja ya contabilizada |
+| COLOCACIONES | Mayor y saldos acumulados de inversiones | Posiciones y rescates programados; no es una segunda fuente de aperturas bancarias |
+| Plataforma | Clasificaciones, ajustes, compromisos y reglas | Decisiones separadas de los hechos importados; una categoría nunca cambia el signo bancario |
+
+**Saldo calculado = saldo inicial + total Cargo − total Abono.** El motor valida importe absoluto, signo y tipo ingreso/egreso. La apertura no aparece como ingreso del período ni se vuelve a proyectar. Desde la sección 37, cada fotografía mensual aceptada incluye también los movimientos anteriores que falten en el nuevo archivo. No se suman fotografías de días distintos.
+
+Si SALDOS BANCOS está presente, sus aperturas son la fuente mensual. Una cabecera Activos adicional con importe bloquea la lectura aunque coincida: dos fuentes de apertura requieren aclaración y nunca se suman. Las etiquetas de grupo sin importe son válidas. Los archivos anteriores con aperturas Activos mantienen compatibilidad antes de adoptar el control mensual. Una hoja SALDOS BANCOS mal formada, una apertura vacía, una cuenta repetida, un movimiento sin apertura, monedas incompatibles o períodos inconsistentes producen errores explícitos. No se interpreta una celda vacía como cero.
+
+### Control visible y alcance de la validación
+
+La vista previa, **Saldos bancarios** y los informes muestran por cuenta: período declarado, apertura, cargos, abonos, saldo calculado, saldo informado y diferencia. Se exportan estos controles junto con la trazabilidad de hoja y fila. Dashboard y Flujo de caja parten de la misma caja calculada y la misma serie diaria.
+
+El archivo recibido **no contiene saldo final informado ni fechas de cobertura en SALDOS BANCOS**. Por eso se muestran **No informado / No comprobable**, sin fabricar una diferencia cero. La cobertura sigue siendo una declaración del usuario al importar: el primer y último movimiento observado no certifican por sí solos el período de la exportación ni la fecha de su apertura.
+
+Si una exportación incluye una columna explícita `Saldo Final`, se utiliza como referencia de control, nunca como otro ingreso o apertura. Una diferencia distinta de cero identifica cuenta, período e importes y bloquea la carga tanto en el frontend como en SQL. La comparación con una cartola sigue disponible como control externo.
+
+### Aplicación
+
+Con el patch de la sección 28 ya instalado, desde el repositorio:
+
+```bash
+git apply --check ~/Downloads/sonacol-erp-saldos-bancarios.patch
+git apply ~/Downloads/sonacol-erp-saldos-bancarios.patch
+pbcopy < supabase/migrations/20260927000000000_erp_bank_balances.sql
+```
+
+Ejecuta el contenido copiado en el editor SQL del proyecto Supabase correspondiente y después compila/publica el frontend con el procedimiento habitual. La migración nueva exige la validación anterior de nombres de reportes; no reescribe el historial. Ante un conflicto de aplicación, conserva los cambios locales y adapta el patch, sin forzarlo. No se han ejecutado migraciones ni despliegues en producción durante esta entrega.
+
+Carga nuevamente ERP.xlsm y declara su cobertura real. Revisa el control bancario antes de confirmar. Si no existe saldo final de referencia, se puede calcular la caja desde aperturas y movimientos, pero el cierre permanece sin conciliación independiente.
+
+### Verificación
+
+Las pruebas cubren apertura separada, cuentas sin movimientos, saldos cero/negativos, egresos, aperturas duplicadas o inválidas, columnas movidas, fuentes contradictorias, cierre informado y diferencias. PostgreSQL valida los importes independientemente del cliente, conserva permisos, decisiones e historial al actualizar y no duplica una reimportación idéntica. Se comprueban también la clasificación sin cambio de signo, el saldo inicial de la proyección y el informe ejecutivo. Los fixtures publicados son anónimos; los datos financieros del archivo recibido no se incorporan al repositorio.
+
+Resultado de esta entrega: **205 pruebas de lógica/PostgreSQL aprobadas**, TypeScript/build correctos y ESLint sin errores (cinco advertencias previas). Navegador: **27/32 aprobados**, incluidos los dos nuevos casos bancarios y los cuatro de ERP/planificación. Los cinco fallos restantes se reprodujeron también sobre la base anterior al patch: ruta antigua del flujo BASE, botón Agenda visual, formato de fecha histórica y textos antiguos de importación/dashboard. No se declara aprobada la suite completa; estos recorridos previos quedan documentados para su actualización.
+
+## 30. Patch: egresos en Resumen y Flujo
+
+`sonacol-flujo-egresos.patch` es incremental sobre `sonacol-erp-saldos-bancarios.patch` ya aplicado. Base exacta: árbol Git `1a860be9edf842e84df42af247bc49a2122d0d1f`. Esta entrega modifica el frontend y sus cálculos; **no requiere una nueva migración SQL**.
+
+### Causa y comportamiento corregido
+
+Las tarjetas y la tabla de proyección de Resumen/Flujo consumían exclusivamente los eventos futuros. Los abonos del ERP ya reducían la caja disponible, pero no tenían un indicador visible del total registrado en estas pantallas. Un valor cero de «Egresos previstos» podía interpretarse como ausencia de egresos bancarios.
+
+Ambas pantallas muestran ahora **Flujo bancario registrado**, con cuatro cifras: apertura del período, ingresos Cargo, egresos Abono y saldo calculado al corte. Se aplica la misma carga seleccionada, banco y moneda que al resto de la vista. Cada cifra abre sus filas de origen. El flujo bancario diario permite verificar apertura + ingresos − egresos = cierre y consultar los abonos de un día. Las aperturas, incluidas las negativas, no se cuentan como movimientos del período.
+
+Las proyecciones siguen comenzando al día siguiente del corte y muestran únicamente cobros/pagos futuros. Los egresos ya contabilizados no se trasladan al futuro ni se vuelven a descontar. «Programar egresos» conduce a los compromisos propios de la plataforma. Un ERP histórico por sí solo no declara pagos futuros.
+
+Las cuentas sin movimientos conservan su apertura y muestran ingresos/egresos cero. Si las cuentas seleccionadas tienen períodos de origen diferentes, se indica la limitación y no se inventa una serie diaria consolidada; puede consultarse un banco con un período común. El libro histórico BASE, que no identifica siempre aperturas separadas, conserva su cálculo original.
+
+### Correcciones relacionadas
+
+| Hallazgo | Corrección |
+| --- | --- |
+| El mínimo incluye la caja al corte, pero la tarjeta buscaba su fecha solo entre días futuros | El motor expone la fecha real del mínimo. Si ocurre al corte, se abre la caja de origen; la etiqueta indica «Mínimo desde el corte» |
+| El mayor egreso quedaba oculto cuando coincidía con el día del mínimo | Se conserva ese hito; se describe como el total de pagos del día |
+| El flujo neto negativo se mostraba con valor absoluto | Se conserva el signo negativo en Resumen y Flujo |
+| Sin ingresos ni egresos futuros, el gráfico inventaba 50%/50% | Se muestra un estado sin flujos previstos y no se calculan porcentajes sobre un total cero |
+| La suma semanal/mensual producía residuos de coma flotante | Los ingresos, egresos y variaciones se acumulan en centavos, conservando primera apertura y último cierre |
+
+### Aplicación y comprobación
+
+Desde el repositorio, con la entrega bancaria anterior instalada:
+
+```bash
+git apply --check ~/Downloads/sonacol-flujo-egresos.patch
+git apply ~/Downloads/sonacol-flujo-egresos.patch
+pnpm build
+```
+
+Publica el frontend con el procedimiento habitual y recarga la aplicación. Las cargas ERP ya aceptadas contienen la información necesaria: no es preciso reimportar para visualizar estos indicadores. Si el patch no coincide con tu versión local, conserva los cambios y adapta la aplicación antes de continuar.
+
+Revisa en Resumen y Flujo la misma carga/moneda/banco. Los egresos registrados deben coincidir con el total Abono de BANCOS, y su saldo calculado debe ser la apertura de la proyección. Los pagos futuros deben verse en sus fechas sin repetir movimientos ERP anteriores al corte. El selector de horizonte solo modifica el período futuro.
+
+Las pruebas usan fixtures anónimos y PostgreSQL aislado. Cubren egresos registrados frente a compromisos futuros, trazabilidad, aperturas negativas y cuentas sin actividad, filtros, series diarias/semanales/mensuales, mínimo al corte, actualización ERP sin acumulación y conservación del histórico y decisiones. El Excel real se valida localmente y no se incorpora al repositorio. No se publica ni modifica la base de producción al preparar el patch.
+
+Resultado: **212 pruebas de lógica/PostgreSQL y 5 pruebas de navegador aprobadas**, TypeScript y compilación correctos, ESLint sin errores (cinco advertencias preexistentes) y control estático de seguridad aprobado. Se comprobaron escritorio y móvil. La prueba aislada con el ERP recibido verificó 174 movimientos bancarios, incluidos 96 egresos, y coincidencia entre cierre bancario diario y caja disponible. Se ejecutó la regresión de navegador pertinente a este cambio; los cinco fallos de recorridos previos documentados en la sección 29 quedan fuera de esta entrega.
+
+## 31. Patch: planificación inicial y ejecución de compromisos
+
+**Estado de esta entrega: implementación con revisión de código; sin ejecutar pruebas, compilación ni migraciones, por instrucción del usuario. Los resultados de pruebas de secciones anteriores no validan este patch.**
+
+`sonacol-planificacion-inicial.patch` es incremental sobre las tres entregas anteriores, incluida `sonacol-flujo-egresos.patch`. Base exacta: árbol Git `736bc6b3ff9b3749ce34102a7096173e934dcf0b`. Incorpora `20260928000000000_initial_business_plan.sql` y requiere las migraciones previas hasta `20260927000000000_erp_bank_balances.sql`.
+
+### Brecha resuelta por el código
+
+Una instalación iniciada solamente desde ERP no tenía los compromisos de PROYEC. La migración nueva incorpora un catálogo privado con los **43 movimientos del plan SONACOL del 24/09/2026: 26 egresos y 17 ingresos**, del 25/09 al 29/12/2026. Son datos iniciales del negocio, separados de las reglas de cálculo y de los hechos ERP. La instalación SQL no los activa ni cambia las cargas históricas.
+
+En **Planificación y reglas** o **Proyecciones**, **Revisar planificación inicial** permite:
+
+- Incorporar los registros faltantes en la última carga ERP SONACOL, con la cuenta y moneda validadas contra sus aperturas bancarias.
+- Conservar registros existentes, incluidos los editados o eliminados, cuando tienen identidad de origen reconocida.
+- Revisar posibles coincidencias y asociar expresamente el registro existente que debe conservarse. Un mismo monto por sí solo no prueba identidad.
+- Seleccionar por separado las partidas vencidas. No se presupone que estén pagadas: mientras sigan pendientes se aplica la regla existente de trasladarlas al primer día proyectado.
+- Conservar el importe original y la coordenada PROYEC/BASE como evidencia. Los importes operativos se redondean a dos decimales de forma explícita.
+
+El catálogo con los datos financieros del plan está en la migración SQL de esta entrega; no se empaqueta como un archivo público del frontend. Su consulta exige acceso autenticado a tesorería y la incorporación exige permiso de escritura y MFA. El catálogo no es una fórmula para repetir esos importes en años posteriores. Los compromisos nuevos y las recurrencias se mantienen en la plataforma.
+
+Una vez incorporados, los compromisos utilizan `daily_manual`, con sus mismas identidades y versiones. El arrastre ya existente conserva plan, ediciones, eliminaciones y ejecuciones en las siguientes cargas ERP del mismo corte o posteriores. Los históricos anteriores mantienen su espacio propio. No hace falta volver a cargar CAJA para incorporar este plan ni para operar después.
+
+### Ejecución real y pendiente de proyectar
+
+En **Proyecciones → Registrar ejecución**, selecciona un movimiento bancario ERP de la misma cuenta, moneda y sentido. Se puede asignar un importe parcial o completar el compromiso. El servidor limita la suma de asignaciones al importe bancario y al pendiente del compromiso, utiliza la revisión vigente y deja auditoría. Los cobros y pagos no se ejecutan automáticamente por coincidir en importe.
+
+`Pendiente = importe planificado − ejecución vinculada`
+
+La caja real sigue dependiendo exclusivamente de aperturas y movimientos bancarios. La asignación no añade ni resta otro movimiento real. El motor compartido de Flujo, Resumen, informes y escenarios proyecta solo el pendiente; una ejecución completa retira el evento futuro. Las tarjetas y la agenda de Proyecciones también utilizan el pendiente, y la tabla conserva el importe original.
+
+Puede retirarse una asignación desde el mismo diálogo. Mientras existan ejecuciones, se impide eliminar el compromiso, cambiar su tipo/moneda/cuenta o reducirlo por debajo de lo ejecutado. Duplicar un compromiso no duplica sus ejecuciones. Los supuestos de escenario también deben respetar el mínimo ya ejecutado.
+
+La evidencia de ejecución acompaña al compromiso cuando cambia el período ERP. Si un movimiento desaparece de una exportación que aún cubre su fecha, se muestra un aviso y se conserva la decisión hasta revisarla. No se infiere una reversa contable por ausencia. La cuenta del compromiso se muestra con el nombre vigente obtenido de su código bancario.
+
+### Aplicación
+
+Desde la raíz de tu repositorio, con el patch anterior aplicado:
+
+```bash
+git apply ~/Downloads/sonacol-planificacion-inicial.patch
+pbcopy < supabase/migrations/20260928000000000_initial_business_plan.sql
+```
+
+Ejecuta el SQL copiado en el editor de tu proyecto Supabase y actualiza el frontend mediante tu procedimiento habitual. Después, selecciona la última carga ERP SONACOL, abre **Planificación y reglas → Revisar planificación inicial**, revisa la selección y pulsa **Aplicar selección**. Si la carga seleccionada es histórica respecto de otra versión, el diálogo permite consultar pero no incorporar el plan sobre ella; no cambies el corte para forzar una equivalencia artificial.
+
+Las posibles coincidencias y las cuentas fuera de cobertura se señalan en la vista previa. No se sustituyen decisiones existentes para forzar los 43 registros. El horizonte de Resumen/Flujo determina qué parte del plan se muestra: el valor inicial de 30 días no incluye todos los compromisos hasta diciembre.
+
+### Alcance y limitaciones
+
+Este patch incorpora el plan conocido de PROYEC y su tratamiento como pendiente/ejecutado. Utiliza las reglas de cobranza y programación de rescates ya disponibles; **no inventa los rescates ni resuelve correspondencias de inversiones que todavía estén pendientes**, ni extiende los importes manuales de este plan más allá de diciembre. Los rescates deben continuar vinculados a una posición real y a su cuenta receptora en Planificación. La equivalencia completa con CAJA requiere la misma cobertura, decisiones de cobranza y programación de inversiones.
+
+No se ejecutaron pruebas unitarias, SQL, navegador, validación TypeScript ni build para esta entrega. No se aplicó el SQL a una base local o productiva ni se realizó despliegue. La revisión fue por lectura del código y del diff. La integración y el comportamiento en ejecución quedan sin verificar.
+
+## 32. Patch: expectativas de las pruebas de planificación
+
+`sonacol-planificacion-check.patch` es incremental sobre `sonacol-planificacion-inicial.patch`, con base exacta en el árbol Git `45e70527540a8f8e9f531829485a53c0bfbc994b`. Corrige dos expectativas que quedaron desactualizadas al incorporar la planificación inicial.
+
+- La prueba de previsiones congeladas exige la versión vigente `erp-business-plan-v2`, verifica que conserva decisiones, movimientos manuales y avisos, y comprueba que el snapshot completo almacenado permanece idéntico después de editar una decisión.
+- La prueba de transición CAJA → ERP comprueba por separado el ajuste sin correspondencia, el rescate sin cuenta receptora válida y el aviso de ausencia de compromisos de egreso. Exige exactamente esos tres avisos; conserva las comprobaciones de fecha de cobro, decisiones migradas e importe/estado del rescate.
+
+El registro de `pnpm check` proporcionado por el usuario muestra TypeScript correcto, ESLint sin errores y con cinco advertencias de Fast Refresh, y 210 de 212 pruebas aprobadas antes de este ajuste. Las dos fallas corresponden a las expectativas anteriores de versión y cantidad de avisos. Ese resultado pertenece a la ejecución del usuario y no valida esta corrección ni todos los nuevos recorridos de planificación.
+
+Aplicación, desde la raíz del repositorio con el patch de planificación inicial ya incorporado:
+
+```bash
+git apply ~/Downloads/sonacol-planificacion-check.patch
+```
+
+Esta entrega modifica únicamente dos archivos de pruebas y esta documentación. No requiere nuevas migraciones SQL. Por instrucción del usuario, no se ejecutaron pruebas, TypeScript, lint, build ni migraciones al preparar esta corrección; la revisión fue por lectura de código y diff.
+
+## 33. Patch 1: saldo real y cierre previsto del corte
+
+**Entrega con revisión de código y diff. Sin ejecutar pruebas, TypeScript, lint, build, macros ni migraciones, por instrucción del usuario. Las verificaciones de entregas anteriores no validan este patch.**
+
+`sonacol-posicion-caja.patch` parte del commit `10f2ca29bd10e3c15bcc08a43e8bb40b96163be1` de `feat/erp-native-operations`, que ya contiene `sonacol-planificacion-check.patch`. Requiere las migraciones anteriores hasta `20260928000000000_initial_business_plan.sql` y agrega `20261012000000000_cash_position.sql`.
+
+### Criterio financiero
+
+La lectura bancaria existente ya utiliza **Cargo − Abono** y mantiene aperturas separadas. La brecha identificada era posterior: todos los pendientes con fecha igual o anterior al corte se trasladaban al día siguiente. Además, los consumidores del snapshot descartaban su versión de cálculo.
+
+Para las cargas ERP con versión `erp-cash-position-v3`, Resumen, Flujo, reportes, escenarios, agenda y asistente utilizan el mismo criterio:
+
+| Concepto | Composición |
+| --- | --- |
+| Saldo bancario real al corte | Saldo inicial + cargos registrados − abonos registrados |
+| Ingresos pendientes del corte | Cobros y rescates programados para esa fecha, todavía pendientes |
+| Egresos pendientes del corte | Compromisos de esa fecha menos su ejecución vinculada |
+| Cierre previsto del corte | Saldo real + ingresos pendientes − egresos pendientes |
+| Apertura proyectada del día siguiente | Cierre previsto del corte |
+
+Los movimientos bancarios registrados no se vuelven a proyectar. Las posiciones de inversión siguen siendo capital invertido; únicamente los rescates programados son eventos de ingreso. La categoría descriptiva no cambia el signo bancario. La ausencia de saldo final informado en ERP permite calcular el saldo y deja la comparación externa como «No comprobable».
+
+Los pendientes **anteriores** al corte conservan su fecha original y la inclusión provisional en el día siguiente, con aviso explícito para revisar sus fechas. No se consideran cobros/pagos realizados ni se atribuyen al cierre del corte. Adoptar otra regla para estos vencidos requiere una decisión de negocio; este patch no presume que todo lo atrasado ocurrirá hoy.
+
+El horizonte conserva su fecha final: un corte 09/10 con horizonte de 7 días termina el 16/10. La nueva serie contiene la fila pendiente del 09/10 y los 7 días posteriores, 8 filas en total. El mínimo considera tanto la caja real al corte como los cierres previstos. Si el mínimo corresponde al cierre previsto del corte, su enlace abre ese cálculo. Los días bajo umbral se cuentan una sola vez por fecha.
+
+### Trazabilidad y cuentas
+
+La sección compartida «Posición de caja» muestra las cuatro cifras y sus movimientos, además del detalle por cuenta y moneda original. Para cobros y rescates utiliza la cuenta receptora (`settlementLedger`), separada de la cuenta contable de origen. Si solo hay un banco declarado, se asigna exclusivamente cuando existe una única cuenta de esa moneda en la cobertura. Un pendiente sin cuenta única sigue incluido en el total filtrado y aparece para revisión; no se inventa saldo para esa cuenta.
+
+Los reportes incluyen apertura diaria, egresos bancarios registrados, pendientes del corte, posición por cuenta y fechas de origen, planificación y cálculo. Conservan los avisos de cobertura y negocio. Los filtros de Resumen y Flujo siguen compartidos. Para comparar cifras utiliza la misma carga, moneda, banco y horizonte; los reportes ejecutivos muestran la moneda original y el total de bancos. La opción literal BASE de las vistas históricas no es una conversión de monedas.
+
+La comparación CAJA/ERP utiliza un criterio de fechas común y avisa cuando recalcula la referencia antigua con el nuevo criterio. Sigue siendo una comparación dentro del motor; no sustituye la comprobación independiente de Excel prevista para la etapa de equivalencia.
+
+### Activación e históricos
+
+La migración agrega `daily_base_batches.projection_engine_version`. Mantiene el criterio anterior en las cargas existentes y activa el nuevo únicamente en la última carga global si corresponde a ERP. Las cargas nuevas guardan la nueva versión; el RPC solo la aplica al perfil ERP. Las cargas BASE/CAJA conservan su comportamiento anterior.
+
+Una carga ERP activada conserva su versión cuando pasa a ser histórica. Las cargas ERP históricas anteriores a la migración mantienen el criterio previo. No se reescriben importes, fechas, datos originales, compromisos ni snapshots de escenarios/previsiones congeladas. Estos últimos se calculan usando la versión guardada dentro del snapshot. Una previsión sin versión conserva el criterio anterior.
+
+La activación cambia la revisión del espacio de trabajo: es necesario actualizar la aplicación y volver a revisar los escenarios que se quieran rebasar sobre la carga vigente. Los nuevos guardados registran el motor real y rechazan un contexto con criterio desactualizado. El SQL debe instalarse junto con el frontend de esta entrega.
+
+### Aplicación
+
+Desde la raíz del repositorio, sobre la rama indicada y el patch anterior ya incorporado:
+
+```bash
+git apply ~/Downloads/sonacol-posicion-caja.patch
+pbcopy < supabase/migrations/20261012000000000_cash_position.sql
+```
+
+Ejecuta el SQL copiado en el editor de tu proyecto Supabase. Actualiza el frontend por tu procedimiento habitual y recarga la aplicación. Selecciona la última carga ERP para ver «Posición de caja». No hace falta reimportar esa carga si era la última al instalar la migración. Si tenías seleccionada una carga histórica anterior, continuará mostrando el criterio antiguo.
+
+### Alcance de la entrega y validación pendiente
+
+La auditoría del CAJA 09/10 distinguió $2.172.083.343 de saldo contable y $2.886.785.491 de cierre previsto, después de $852.295.153 de rescate y $137.593.005 de egresos manuales del día. Son referencias de la auditoría del archivo, **no resultados obtenidos al ejecutar este patch**. La antigua ERP tiene otro corte; este cambio no fabrica datos actualizados ni garantiza esos importes en la instalación actual.
+
+La planificación vigente, las colocaciones propuestas y el remanente posterior a colocaciones corresponden al siguiente patch. Esta entrega no reemplaza automáticamente los 43 compromisos iniciales de septiembre por los 38 de octubre. El resultado previsto sigue dependiendo de las decisiones realmente registradas en la plataforma.
+
+Se incorporan casos de regresión para cierre del corte, Cargo/Abono, ejecución parcial/completa, cuenta receptora, pendientes sin cuenta, monedas, vencidos, agregación semanal/mensual, coherencia de reportes/escenarios, mínimo al corte y actualización de una instalación con históricos congelados. Se adaptan tres llamadas de pruebas existentes al contexto versionado. **Ninguno de estos casos fue ejecutado**; la compilación, la integración SQL y el comportamiento de navegador quedan pendientes de verificación. No se modificó producción ni se hizo push o despliegue.
+
+## 34. Patch 2: planificación operativa y liquidez después de colocar
+
+> Actualización posterior: el patch 3 agrega revisión preventiva de ejecuciones al importar ERP; véase la sección 35. No certifica equivalencia al mismo corte con CAJA.
+
+**Revisión por lectura de código, diff y referencias del archivo. Sin ejecutar pruebas, TypeScript, lint, build, macros ni migraciones. Los casos nuevos se entregan sin ejecutar; no hay certificación de compilación, integración SQL ni equivalencia numérica de producción.**
+
+`sonacol-planificacion-operativa.patch` es incremental sobre el commit `44fb0cdcda53cca9592c98c464b0bd4554758751` de `feat/erp-native-operations`, con el patch 1 ya aplicado. Agrega, en este orden:
+
+1. `20261012010000000_planning_operations.sql`.
+2. `20261012020000000_october_plan_review.sql`.
+
+No modifica el lector de datos crudos ni instala datos operativos automáticamente. Mantiene `erp-cash-position-v3`, su corte seleccionado y los snapshots congelados. Las migraciones y el frontend deben actualizarse juntos; el antiguo botón de incorporación de septiembre se reemplaza por la transición revisada.
+
+### Referencia de negocio y transición
+
+La referencia es **CAJA SONACOL v4 09-10-2026.xlsm**, SHA-256 `786e2b1282c6ca60c0c91de9aaa78225c6bd835011f99983524fc5a61d80be98`. Su catálogo privado se consulta mediante un RPC autenticado. No requiere subir CAJA a la aplicación y no forma parte de la actualización diaria ERP.
+
+| Elemento auditado | Implementación y decisión requerida |
+| --- | --- |
+| 38 compromisos de PROYEC | Movimientos manuales nativos con fecha, importe, tipo, categoría y cuenta. Adoptar, conservar un registro existente o dejar pendiente. |
+| 5 colocaciones propuestas de INVERSIONES | Egresos planificados por cuenta, sin ejecución, rentabilidad ni vencimiento presumidos. |
+| 6 rescates de COLOCACIONES | Decisiones sobre una posición ERP elegida expresamente; cuenta receptora de BASE, distinta del banco del fondo. |
+| 6 políticas de cobranza por cliente | Vencimiento + 5 días naturales y cuenta receptora, aplicables a próximas facturas. Se confirman por código de cliente presente en ERP. |
+| 48 referencias de facturas | Revisión de cuenta y de las 6 excepciones explícitas de fecha. No crean facturas ni duplican sus importes. |
+| Fórmulas de fecha sin excepción | Permanecen como reglas; no se copia la fecha calculada como un ajuste fijo. |
+| Importes manuales futuros | Permanecen como decisiones editables. No se deducen nuevas recurrencias de importes repetidos. La agenda conserva sus recurrencias semanales/mensuales explícitas. |
+
+En **Planificación y reglas → Revisar transición del plan**, cada referencia empieza pendiente. Las opciones son crear, vincular conservando valores, o adoptar explícitamente los valores de la referencia sobre un registro existente. La revisión muestra ambos lados y requiere decidir conservar o retirar los compromisos anteriores sin correspondencia. Retirar cancela solo el pendiente; no indica que haya sido pagado y no borra ejecuciones.
+
+La identidad de una referencia incluye su versión y origen. **Una fila de octubre nunca se empareja automáticamente con la misma fila de septiembre.** Las sugerencias por fecha/importe son solo ayudas. Una identidad incorporada, editada, cancelada o eliminada permanece reconocida en posteriores revisiones y cargas ERP. Se impide usar un registro para dos referencias de esta versión. Las proyecciones vinculadas a documentos deben desvincularse antes de sustituir sus valores o retirar su pendiente.
+
+Adoptar valores de un compromiso reemplaza su fecha operativa, importe, cuenta, descripción y categoría; conserva estado, ejecución, comentarios, adjuntos e identidad de recurrencia. La fecha confirmada de su agenda se libera para que no oculte la nueva fecha adoptada. Conservar mantiene todos esos valores. Las operaciones son atómicas, requieren rol autorizado/MFA y rechazan revisiones desactualizadas.
+
+### Cobranza y correspondencias incompletas
+
+Las políticas por cliente pueden incorporarse independientemente de que las facturas de octubre aún no aparezcan en el ERP disponible. No sustituyen automáticamente reglas configuradas: hay que conservar o adoptar la decisión, y la adopción explícita asigna una prioridad superior a las reglas actuales. Las excepciones por factura siguen prevaleciendo.
+
+Una referencia de factura exige coincidencia de empresa, código de cliente, documento, importe, moneda, emisión y vencimiento. Si hay varios destinos, deben revisarse sus identificadores y filas ERP. Sin coincidencia, queda pendiente; no se marca cobrada por ausencia.
+
+La lectura del ERP de septiembre confirmó los códigos de cinco clientes. **COPEC requiere revisión:** CAJA indica RUT `0099520000-5` (referencia `C995200005`), mientras ese ERP contiene `C995200007`, `COPEC S.A.`. Este patch no equipara esos códigos por semejanza del nombre. La política y facturas de esa referencia no se asignan al otro código automáticamente. Puede configurarse una política nativa para el cliente correcto una vez aclarada la identidad.
+
+### Colocaciones, rescates y cálculo
+
+**Planificación → Colocaciones propuestas** permite crear, editar, cancelar y registrar ejecución de las colocaciones; también están en Proyecciones. La cuenta es explícita por código y moneda. Se elimina la elección arbitraria de la primera cuenta cuando varias comparten nombre de banco.
+
+En un rescate guardado, **Editar → Ver o registrar ejecución guardada** abre la asignación contra cargos ERP. Compromisos y colocaciones utilizan el mismo control contra sus movimientos compatibles. Cada operación conserva importe original, asignaciones y pendiente; las reservas de rescate consumen solo el importe pendiente. Un movimiento no puede asignarse en exceso entre rescates y otros compromisos. Las asignaciones no crean otro movimiento real ni alteran el capital ERP.
+
+Una ejecución completa elimina el evento futuro sin borrar su evidencia. Retirar una asignación vuelve a calcular el pendiente; cambiar manualmente el estado no demuestra una ejecución. Los estados «Ejecutado» anteriores sin asignaciones se conservan y se señalan para revisión. No pueden borrarse decisiones con asignaciones ni cambiar sus cuentas, monedas o posiciones sin retirarlas primero; el importe no puede quedar por debajo de lo ejecutado.
+
+Resumen y Flujo muestran, en total y por cuenta:
+
+`Saldo real + ingresos pendientes − pagos pendientes sin colocaciones = caja prevista antes de colocar`
+
+`Caja prevista antes de colocar − colocaciones pendientes = liquidez prevista tras colocaciones`
+
+Las colocaciones ya están incluidas una vez en los egresos del motor. El desglose no realiza una segunda resta. Los reportes contienen el mismo puente y el detalle diario. La apertura siguiente parte de la liquidez final prevista. Se mantienen monedas y fechas originales y la política de vencidos del patch 1.
+
+### Aplicación
+
+Desde la raíz de la rama indicada, con el patch 1 ya instalado:
+
+```bash
+git apply ~/Downloads/sonacol-planificacion-operativa.patch
+pbcopy < supabase/migrations/20261012010000000_planning_operations.sql
+```
+
+Ejecuta el primer SQL una sola vez en el editor de Supabase. Después copia y ejecuta el segundo:
+
+```bash
+pbcopy < supabase/migrations/20261012020000000_october_plan_review.sql
+```
+
+Actualiza el frontend mediante tu procedimiento habitual y recarga la aplicación. Selecciona la última carga ERP y abre la revisión del plan. No reapliques migraciones anteriores ni cambies la fecha ERP para simular datos de octubre.
+
+### Límites y controles pendientes
+
+La auditoría de Excel distingue: caja real CLP **2.172.083.343**, rescate del día **852.295.153**, pagos manuales **137.593.005**, caja antes de colocar **2.886.785.491**, propuestas de colocación **2.877.900.000**, liquidez restante **8.885.491**. Son cifras del archivo de referencia, no resultados ejecutados de esta entrega. La ERP disponible es de otro corte; no se garantiza esa equivalencia en la instalación.
+
+Las celdas auxiliares de vencimiento/rentabilidad de INVERSIONES estaban desactualizadas respecto del 09/10; no se utilizan para inventar nuevos rescates o intereses. Las 6 partidas de COLOCACIONES comparten la cuenta contable `511030001`: el ERP no aporta por sí solo identidad de fondo/tramo. La asignación y el límite de capital se revisan en la plataforma.
+
+Pendiente de verificación en ejecución: instalación sobre la base vigente, adopción atómica e idempotente, edición y preservación de decisiones, cuentas y monedas, ejecuciones compartidas/parciales/completas, arrastre a nuevas cargas, vistas móviles y conservación de previsiones congeladas. Se agregan casos en `tests/planning-operations.test.ts`, sin ejecutarlos. El control más amplio de cobertura/reimportación y la comprobación independiente de equivalencia al mismo corte siguen correspondiendo a los patches 3 y 4.
+
+## 35. Patch 3: revisión preventiva de actualización ERP
+
+> El patch 4 agrega comparación opcional de cierre y corrige falsos positivos de la comparación histórica; véase sección 36.
+
+Requiere ambos SQL del patch 2 y agrega `20261013000000000_erp_refresh_review.sql`. Instalar la migración antes de desplegar el frontend. No modifica filas existentes, cálculos de Cargo/Abono ni el mecanismo de arrastre; envuelve las RPC actuales y mantiene sus controles de permisos, versión y transacción.
+
+La comparación de una carga vigente incorpora `refreshReview`: cuentas/monedas ausentes, asignaciones verificadas y evidencia que requiere revisión. Se suman conjuntamente ejecuciones de compromisos y rescates, incluso cancelados no eliminados. La revisión se repite en el servidor bajo el bloqueo de importación, sin confiar en el botón del navegador.
+
+- Identidad exacta presente: compara cuenta, moneda, fecha, tipo e importe bancario original y comprueba el total asignado.
+- Identidad ausente dentro del período cubierto: bloquea. Cambiar descripción o importe puede cambiar la identidad; no se intenta adivinar una correspondencia nueva.
+- Cantidad de movimientos idénticos modificada: bloquea si afecta una ejecución. No deduplica movimientos legítimos por importe ni por descripción.
+- Ejecución anterior a la apertura: conserva la evidencia histórica sin volver a contabilizarla. No certifica que la apertura sea correcta.
+- Cuenta/moneda ausente: advierte, no interpreta cero, conserva la evidencia. No combina saldos de distintos cortes ni reconstruye la cuenta omitida.
+- Carga histórica: no compara ni arrastra las ejecuciones de la planificación vigente. Mantiene el comportamiento histórico anterior.
+
+Para un bloqueo, corregir primero una exportación incompleta o revisar la asignación en la versión vigente mediante su diálogo de ejecución. Retirar evidencia únicamente si es incorrecta y volver a analizar ERP. No existe reasignación automática ni una excepción para ignorar el bloqueo. Una corrección bancaria legítima puede exigir revisión explícita de la asignación anterior y vinculación posterior al movimiento corregido.
+
+Sin pruebas, lint, compilación ni migraciones ejecutadas por solicitud del usuario. Pendiente validar en una base de ensayo: reimportación idéntica, cambio de corte/apertura, movimiento corregido o ausente, duplicados, combinación manual/rescate, conflictos concurrentes, cobertura por moneda y carga histórica. Este patch no incorpora un asistente de remapeo ni certifica el cierre de la migración o equivalencia con CAJA; requiere ERP del mismo corte para esa comprobación.
+
+## 36. Patch 4: control de equivalencia del cierre
+
+> La auditoría anterior está en `docs/erp-09-10-aperturas-vencimientos.md`. El contrato mensual de la sección 37 sustituye su interpretación diaria de SALDOS BANCOS y conserva el soporte de vencimientos explícitos.
+
+Incremental sobre `9c20d45` (patches 1–3 publicados). No requiere nuevas migraciones, cambios de dependencias ni importación diaria de CAJA.
+
+Resumen y Flujo de caja incluyen «Comparar cierre con una referencia» dentro de Posición de caja. Ingresa documento/hoja/celdas, fecha y seis totales independientes del cierre de referencia: saldo bancario real, ingresos pendientes, pagos pendientes sin colocaciones, caja antes de colocar, colocaciones pendientes y liquidez final. Las cifras no se precargan desde los cálculos de la app ni desde un Excel de otro corte. Cada campo acepta número sin separadores de miles y hasta dos decimales; vacío no equivale a cero.
+
+La revisión exige corte idéntico, una moneda específica y confirmación del mismo alcance de cuentas y pendientes. Valida ambas ecuaciones de la referencia y contrasta el saldo ERP mostrado contra el control bancario por cuenta (apertura + cargos − abonos). Un saldo final no informado por ERP permanece desconocido y no se exige para calcularlo. Incidencias del motor, decisiones de negocio, cargas parciales y cuentas pendientes de asignación impiden indicar coincidencia sin observaciones. Las diferencias válidas se muestran aunque existan otras incidencias.
+
+Los valores ingresados son locales al formulario y no se guardan como ajustes ni se reutilizan en otra carga, banco o moneda. La revisión puede exportarse a CSV mediante el permiso de exportación existente; incluye referencia, alcance, archivos de origen, cuentas, ambos valores, diferencias y observaciones. La comparación no modifica saldos ni verifica automáticamente que la referencia digitada sea auténtica/completa.
+
+Se corrige también la comparación histórica CAJA/plataforma: un saldo neto coincidente deja de indicarse como coincidencia si hay movimientos sin correspondencia o diferencias de cuenta/tipo. Esa comparación continúa recalculando ambas cargas con el motor común y no constituye una comprobación independiente de fórmulas Excel.
+
+### Estado de la migración
+
+La operación diaria se mantiene en ERP más decisiones, compromisos, rescates, colocaciones y reglas nativas. CAJA puede servir de referencia de transición, no se añade como requisito diario. No se eliminan cargas históricas ni los mecanismos de consulta anteriores.
+
+Entrega revisada estáticamente, **sin ejecutar pruebas, lint, TypeScript, compilación ni migraciones**. Pendiente comprobar en ejecución: diferencias compensadas, cuenta distinta dentro del mismo banco, campos vacíos/cero/negativos, cortes incompatibles, monedas, permisos CSV, cambios de carga y advertencias. Sigue pendiente la comparación financiera completa por cuenta y movimiento con ERP/CAJA reales del mismo corte; el control de seis totales no certifica por sí solo toda la funcionalidad financiera ni da por cerrada la migración.
+
+## Guía y presentación
+
+La guía de usuario está disponible en **Datos y control → Guía de usuario** (`/help`). Incluye búsqueda local, índice, procedimientos y glosario. El alcance del refinamiento visual se documenta en `docs/ui-refinement.md`; no requiere migraciones ni cambia cálculos financieros.
+
+## 37. Apertura mensual y actualización incremental ERP
+
+Contrato vigente: **SALDOS BANCOS es apertura mensual; BANCOS contiene movimientos fechados. Caja = apertura mensual + cargos acumulados − abonos acumulados.** El corte del archivo es independiente del primer día del mes. El informe completo, los controles por cuenta y las limitaciones están en [docs/erp-monthly-incremental.md](docs/erp-monthly-incremental.md).
+
+El patch `sonacol-erp-mensual-incremental.patch` parte de `25e5207e15238cdce87da9571c1908b605ce6cfd` más `sonacol-refinamiento-visual.patch` ya aplicado, aunque siga sin commit. No repite el refinamiento visual. Después de comprobar y aplicar el patch, instala **solo** `supabase/migrations/20261014000000000_monthly_incremental_erp.sql`, después de `20261013010000000_daily_openings_maturities.sql`, y luego despliega el frontend actualizado. No vuelvas a ejecutar migraciones instaladas.
+
+Para `ERP 13-10.xls`, usa empresa **SONACOL**, moneda **CLP**, corte **2026-10-13**, inicio bancario **2026-10-01** e inicio de inversiones **2026-09-30**. Si SALDOS BANCOS no informa fecha, el mes se declara en el contexto; su fecha original permanece vacía.
+
+La comparación reconoce movimientos ya registrados e incorpora solo identidades bancarias nuevas. Conserva movimientos omitidos, sus fechas, origen y relaciones; muestra su efecto neto y permite desplegar su detalle. Bloquea aperturas inconsistentes y líneas ambiguas o corregidas de un asiento conocido. El resumen de una carga confirmada contiene contadores del servidor después de completar la transacción. Una repetición sin cambios reutiliza la fotografía y registra el intento exitoso sin añadir movimientos.
+
+**Diferencia real pendiente:** al pasar del ERP 09-10 al 13-10 hay 8 movimientos nuevos, 16 coincidentes y 11 anteriores ausentes con efecto neto **−832.000.000 CLP**. Conservándolos, la caja calculada es **1.368.585.141 CLP**; leyendo únicamente el archivo del 13, es **2.200.585.141 CLP**. Se informa la diferencia y no se borran registros para igualar ambos resultados. Ambos archivos carecen de cierre bancario informado.
+
+El registro bancario independiente sobrevive a la eliminación explícita de fotografías Excel; el diálogo informa sus cantidades. Borrar una fotografía no anula movimientos ni autoriza corregir sus importes. No se reescriben históricos al instalar la migración.

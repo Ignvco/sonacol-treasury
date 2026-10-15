@@ -1,10 +1,12 @@
 import { defineConfig, PluginOption } from "vite";
 import { enterDevPlugin, enterProdPlugin } from 'vite-plugin-enter-dev';
 import path from "path";
+import { localesPlugin } from "./config/locales-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const plugins = [
+    localesPlugin(),
     ...enterProdPlugin(),
   ];
   if (mode === 'development') {

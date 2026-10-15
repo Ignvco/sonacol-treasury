@@ -48,9 +48,9 @@ export function ProjectionDay({
             data-testid="projection-day-formula"
           >
             {[
-              ["Saldo inicial del día", day.initial],
-              ["Ingresos del día", day.income],
-              ["Egresos del día", day.expense],
+              [date === model.cutoff ? "Saldo bancario real al corte" : "Saldo inicial del día", day.initial],
+              ["Ingresos pendientes", day.income],
+              ["Egresos pendientes", day.expense],
               ["Saldo previsto al cierre", day.final],
             ].map(([label, value]) => (
               <div key={label} className="min-w-0 rounded-xl border p-3">
@@ -63,10 +63,14 @@ export function ProjectionDay({
           </dl>
           <p className="text-xs text-muted-foreground">
             Saldo inicial + ingresos − egresos = saldo previsto. El saldo
-            inicial del día incluye la caja de BASE y los {previous.length}{" "}
+            inicial del día incluye el saldo bancario real y los {previous.length}{" "}
             movimientos proyectados anteriores. Este día contiene{" "}
             {movements.length} movimientos.
           </p>
+          {date === model.cutoff && <p className="text-xs text-muted-foreground">
+            Son movimientos aún pendientes en la fecha de corte. Los cargos y abonos
+            importados ya forman parte del saldo real y no se repiten en esta proyección.
+          </p>}
           <button
             className="t-button-secondary justify-center"
             onClick={() => setSources(true)}

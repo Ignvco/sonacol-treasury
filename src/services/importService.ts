@@ -19,6 +19,7 @@ export interface ImportProgress {
   total: number;
 }
 export interface ExcelDeletionPlan {
+  preservedBankRegister?: { movements: number; openings: number };
   revision: string;
   batchIds: string[];
   legacyIds: string[];
@@ -59,6 +60,7 @@ function deletionError(error: { code?: string; message?: string }): string {
 }
 
 const toImportBatch = (r: any): ImportBatch => ({
+  incremental: r.incremental ?? r.incremental_summary ?? undefined,
   id: r.id,
   fileName: r.file_name,
   source: r.source,
@@ -209,6 +211,8 @@ export const importService = {
       throw new Error(
         "Vuelve a analizar el archivo para comparar los cambios.",
       );
+    if (preview.comparison.incremental?.blocking)
+      throw new Error("Revisa las aperturas y los movimientos ambiguos antes de confirmar.");
     const { data: session, error: sessionError } =
       await supabase.auth.getSession();
     if (sessionError || !session.session)

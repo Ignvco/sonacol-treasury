@@ -71,7 +71,7 @@ test("reviewed bindings move MANUAL links atomically and source evidence survive
     assert.equal(carried.links[0].target_id, target.id);
     assert.equal(carried.rows.find(r => r.kind === "investment")!.normalized.reservedAmount, 5000);
     const revision = await query(db, "select treasury_revision($1) s", [b.id]);
-    const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [b.id, revision, JSON.stringify({ cutoff: "2026-09-11", currency: "CLP", horizon: 30, minimum: 0 })]);
+    const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [b.id, revision, JSON.stringify({ cutoff: "2026-09-11", currency: "CLP", horizon: 30, minimum: 0, engineVersion: carried.engineVersion })]);
     assert.deepEqual(frozen.snapshot.business.find((d: BusinessDecision) => d.id === saved.id).source_json, pending.source_json);
     const missing = structuredClone(next); missing.forEach(r => { r.normalized.cutoffDate = "2026-09-12"; });
     const replaced = missing.find(r => r.entityType === "invoice" && r.normalized.document === "502")!;

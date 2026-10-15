@@ -1,4 +1,6 @@
 import { ErpImportContext } from "./ErpImportContext";
+import { ErpIncrementalSummary } from "./ErpIncrementalSummary";
+import { ErpRefreshReview } from "./ErpRefreshReview";
 import { useAuth } from "@/contexts/auth-context";
 import { ReadingProfileSummary } from "./ReadingProfileSummary";
 import { ImportCutoff } from "./ImportCutoff";
@@ -115,8 +117,8 @@ export function ImportPreview({
         subtitle={preview.fileName}
       >
         {isErp && <ErpImportContext initial={applied.ERP} busy={busy}
-          firstBankDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "BANCOS")?.reading?.firstMovementDate}
-          firstInvestmentDate={preview.sheets.find(s => s.name.trim().toUpperCase() === "COLOCACIONES")?.reading?.firstMovementDate}
+          firstBankDate={preview.sheets.find(s => s.reading?.erpReport === "BANCOS")?.reading?.firstMovementDate}
+          firstInvestmentDate={preview.sheets.find(s => s.reading?.erpReport === "COLOCACIONES")?.reading?.firstMovementDate}
           onDirty={() => { setContextDirty(true); setReviewed(false); }} onApply={ERP => onAnalyze({ ...applied, ERP })} />}
         {isErp && cutoffIssue && <p role="alert" className="mb-4 text-sm text-danger">{cutoffIssue}</p>}
         {reading && !isErp && <ImportCutoff reading={reading} value={cutoffDate} issue={cutoffIssue} busy={busy}
@@ -140,7 +142,7 @@ export function ImportPreview({
           ))}
         </div>
         <p className="mb-4 rounded-xl bg-brand-soft p-4 text-sm">
-          {isErp ? "Se leen los datos crudos de BANCOS, CLIENTES y COLOCACIONES. La plataforma conserva tus movimientos manuales, reglas y ajustes y genera las proyecciones. Los saldos de apertura no se consideran ingresos del período." : "Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los datos completos de esta fecha. MANUAL conserva tus ediciones; selecciona únicamente las que quieras reemplazar con el Excel."}
+          {isErp ? "Se leen los datos crudos de BANCOS, CLIENTES y COLOCACIONES. SALDOS BANCOS aporta las aperturas por cuenta cuando está presente. Cargo suma; Abono resta. La plataforma conserva tus movimientos manuales, reglas y ajustes y genera las proyecciones. Los saldos de apertura no se consideran ingresos del período." : "Solo se lee BASE. BANCO, CLIENTES y COLOCACIONES se reemplazan por los datos completos de esta fecha. MANUAL conserva tus ediciones; selecciona únicamente las que quieras reemplazar con el Excel."}
         </p>
         {preview.sheets
           .filter((sheet) => sheet.reading)
@@ -148,6 +150,8 @@ export function ImportPreview({
             <ReadingProfileSummary key={sheet.name} reading={sheet.reading!} />
           ))}
         <ImportControlTotals records={preview.records} />
+        <ErpIncrementalSummary result={preview.comparison?.incremental} />
+        <ErpRefreshReview review={preview.comparison?.refreshReview} />
         {!!preview.comparison?.uncoveredCurrencies?.length && <p role="alert" className="mb-4 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm">
           La carga anterior contenía {preview.comparison.uncoveredCurrencies.join(", ")}, fuera de la cobertura de esta exportación. Esos datos permanecen en el histórico. Confirmar esta carga no acredita que sus saldos sean cero.
         </p>}
@@ -325,6 +329,8 @@ export function ImportPreview({
                 !!cutoffIssue ||
                 !reviewed ||
                 !preview.comparison ||
+                !!preview.comparison?.refreshReview?.blocking ||
+                !!preview.comparison?.incremental?.blocking ||
                 preview.error > 0 ||
                 !preview.total ||
                 preview.valid + preview.warning === 0

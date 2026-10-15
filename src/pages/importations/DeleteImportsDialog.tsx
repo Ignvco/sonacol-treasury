@@ -193,6 +193,9 @@ export function DeleteImportsDialog({
                     eliminados, deberás reimportar el Excel; eso no recupera las
                     ediciones MANUAL borradas.
                   </p>
+                  {!!((plan.preservedBankRegister?.movements ?? 0) + (plan.preservedBankRegister?.openings ?? 0)) && <p className="rounded-lg border border-warning/30 p-3 text-sm">
+                    El registro incremental conserva {plan.preservedBankRegister!.movements} movimientos y {plan.preservedBankRegister!.openings} aperturas mensuales reconocidas. Al volver a importar ERP se reconocerán esos datos. Eliminar el archivo no corrige ni anula una operación bancaria.
+                  </p>}
                   <label className="grid gap-2 text-sm font-medium">
                     Escribe {phrase} para confirmar
                     <input

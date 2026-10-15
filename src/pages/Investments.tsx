@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { InvestmentMaturities } from "@/components/treasury/InvestmentMaturities";
 import { Link } from "react-router-dom";
 import { CalendarClock, CalendarRange, Percent, PiggyBank, Wallet, X } from "lucide-react";
 import { useAsyncData } from "@/hooks/use-async";
@@ -50,6 +51,7 @@ export default function Investments() {
       dueSoonAmount: dueSoon.reduce((a, i) => a + i.amount, 0),
       dueSoonCount: dueSoon.length,
       unknownInterest: active.filter((i) => i.rateKnown === false).length,
+      sourceMaturities: active.some(i => i.maturityEntries?.length),
       interest: active.reduce((a, i) => a + i.estimatedInterest, 0),
     };
   }, [items]);
@@ -63,7 +65,7 @@ export default function Investments() {
     Banco: bankName.get(i.bankId) ?? "—",
     Monto: i.amount,
     Inicio: formatDateMedium(i.startDate),
-    Término: formatDateMedium(i.endDate),
+    Término: i.maturityEntries ? "Consultar vencimientos por asiento ERP" : formatDateMedium(i.endDate),
     "Días restantes": Math.max(0, daysUntil(i.endDate)),
     Tasa: i.rateKnown === false ? "No informada" : `${i.rate}%`,
     "Interés estimado": i.rateKnown === false ? "No informado" : i.estimatedInterest,
@@ -80,6 +82,7 @@ export default function Investments() {
         actions={<><Link className="t-button-secondary" to="/planning">Programar rescates</Link><ExportMenu rows={exportRows} filename="inversiones" /></>}
       />
 
+      {items.filter(i => i.maturityEntries).map(i => <InvestmentMaturities key={i.id} entries={i.maturityEntries!} cutoff={i.maturityCutoff || ""} />)}
       <BentoStats
         items={[
           {
@@ -92,12 +95,12 @@ export default function Investments() {
           {
             key: "dueSoon",
             label: "Por vencer (30 días)",
-            valueText: money(summary.dueSoonAmount),
+            valueText: summary.sourceMaturities ? "Revisar por asiento" : money(summary.dueSoonAmount),
             subtext:
-              summary.dueSoonCount > 0
+              summary.sourceMaturities ? "Fechas ERP disponibles arriba; capital por fecha pendiente de asignar" : summary.dueSoonCount > 0
                 ? `${summary.dueSoonCount} inversiones`
                 : "Sin vencimientos próximos",
-            tone: summary.dueSoonCount > 0 ? "warning" : "success",
+            tone: summary.sourceMaturities || summary.dueSoonCount > 0 ? "warning" : "success",
             icon: CalendarClock,
           },
           {
@@ -124,7 +127,7 @@ export default function Investments() {
       {/* Maturity timeline */}
       <SectionCard
         title="Calendario de Vencimientos"
-        subtitle="Próximos rescates y vencimientos"
+        subtitle={summary.sourceMaturities ? "Posiciones agregadas: consulta las fechas por asiento ERP arriba y los rescates en Planificación." : "Próximos rescates y vencimientos"}
         action={
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft text-brand-dark">
             <CalendarRange className="h-4 w-4" strokeWidth={1.8} />
@@ -160,7 +163,7 @@ export default function Investments() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Portafolio" subtitle="Detalle de inversiones vigentes" bodyClassName="pt-2">
+      <SectionCard title="Portafolio" bodyClassName="pt-2">
         <DataTable<Investment>
           data={items}
           rowKey={(i) => i.id}
@@ -183,7 +186,7 @@ export default function Investments() {
             },
             { key: "amount", header: "Monto", align: "right", sortValue: (i) => i.amount, render: (i) => <span className="t-num font-semibold">{money(i.amount)}</span> },
             { key: "start", header: "Inicio", hideBelow: "lg", render: (i) => <span className="text-muted-foreground">{formatDateShort(i.startDate)}</span> },
-            { key: "end", header: "Término", sortValue: (i) => i.endDate, render: (i) => <span className="text-muted-foreground">{formatDateShort(i.endDate)}</span> },
+            { key: "end", header: "Término", sortValue: (i) => i.endDate, render: (i) => <span className="text-muted-foreground">{i.maturityEntries ? "Ver fechas ERP" : formatDateShort(i.endDate)}</span> },
             {
               key: "days",
               header: "Días restantes",
@@ -194,7 +197,7 @@ export default function Investments() {
                 const d = daysUntil(i.endDate);
                 return (
                   <span className={cn("t-num text-[12px] font-semibold", d <= 30 && d >= 0 ? "text-warning" : d < 0 ? "text-muted-foreground" : "text-foreground")}>
-                    {!i.endDate ? "Sin programar" : i.status === "rescatada" ? "—" : d >= 0 ? d : "Vencida"}
+                    {i.maturityEntries ? "Por asiento ERP" : !i.endDate ? "Sin programar" : i.status === "rescatada" ? "—" : d >= 0 ? d : "Vencida"}
                   </span>
                 );
               },

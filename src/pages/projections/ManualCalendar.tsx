@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Projection } from "@/financial-engine/types";
-import { nextDate } from "@/financial-engine/base-treasury";
+import { nextDate, pendingProjectionAmount } from "@/financial-engine/base-treasury";
 import { baseNumber } from "@/components/treasury/SourceBreakdown";
 export function ManualCalendar({
   items,
@@ -126,10 +126,10 @@ export function ManualCalendar({
                 >
                   <p className="line-clamp-2 font-medium">{p.description}</p>
                   <p className="mt-1 break-words">
-                    {baseNumber(p.amount)} {p.currency}
+                    Pendiente: {baseNumber(pendingProjectionAmount(p.amount, p.executedAmount ?? 0))} {p.currency}
                   </p>
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    {p.status}
+                    {(p.executedAmount ?? 0) > 0 ? `Ejecutado: ${baseNumber(p.executedAmount!)} ${p.currency}` : p.status}
                   </p>
                 </button>
               ))}

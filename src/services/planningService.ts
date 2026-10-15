@@ -12,6 +12,11 @@ export const planningService = {
     workingDate.refresh();
     return saved;
   },
+  async initializeRules(batch: string) {
+    const count = await treasuryRpc<number>("treasury_initialize_operating_rules", { p_batch: batch });
+    workingDate.refresh();
+    return count;
+  },
   previewCollection: (batch: string, target: string, values: BusinessDecision["values_json"]) =>
     treasuryRpc<CollectionPolicyPreview>("treasury_preview_collection_policy", { p_batch: batch, p_target: target, p_values: values }),
   async adoptCollection(batch: string, target: string, values: BusinessDecision["values_json"], expected: string) {

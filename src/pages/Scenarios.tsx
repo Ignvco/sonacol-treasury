@@ -56,6 +56,7 @@ export default function Scenarios() {
     links = saved ? saved.snapshot.links : bundle.links;
   const safeContext = {
     ...context,
+    engineVersion: saved ? saved.snapshot.engineVersion : bundle.engineVersion,
     cutoff: saved?.snapshot.batch?.cutoff ?? bundle.cutoff,
   };
   const model = decisionModel(rows, links, safeContext, adjustments),
@@ -219,7 +220,7 @@ export default function Scenarios() {
                       await decisionService.freeze(
                         bundle.batch!.id,
                         workspace.revision,
-                        { ...safeContext, cutoff: bundle.cutoff },
+                        { ...safeContext, cutoff: bundle.cutoff, engineVersion: bundle.engineVersion },
                       );
                       toast.success(
                         "Previsión actual congelada para medir su precisión",
@@ -240,6 +241,12 @@ export default function Scenarios() {
               <p className="mt-3 text-sm text-warning">
                 Hay cambios posteriores en MANUAL. Revisa las diferencias y
                 rebasa antes de guardar.
+              </p>
+            )}
+            {saved && saved.snapshot.engineVersion !== bundle.engineVersion && (
+              <p className="mt-3 text-sm text-warning">
+                Este escenario conserva el criterio de fechas con el que se guardó.
+                Rebasa sobre datos actuales para adoptar el cálculo de la carga seleccionada.
               </p>
             )}
           </SectionCard>

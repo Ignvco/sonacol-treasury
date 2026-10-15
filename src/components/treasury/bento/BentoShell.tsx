@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * grid consistent: navy (hero), plain (white card) and sunken (soft inset).
  */
 const SURFACE = {
-  navy: "border-transparent bg-gradient-brand text-white",
+  navy: "border-transparent bg-brand-deep text-white",
   plain: "border-border bg-card",
   sunken: "border-border bg-sunken",
   success: "border-success/25 bg-success-soft",
@@ -32,7 +32,7 @@ export function BentoCard({
     <section
       {...rest}
       className={cn(
-        "animate-rise relative min-w-0 overflow-hidden rounded-[24px] border shadow-bento transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-bento-hover",
+        "relative min-w-0 overflow-hidden rounded-2xl border shadow-bento",
         padding === "sm" ? "p-4" : "p-5 sm:p-6",
         SURFACE[surface],
         className,

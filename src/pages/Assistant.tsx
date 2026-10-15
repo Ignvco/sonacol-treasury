@@ -29,6 +29,7 @@ export default function Assistant() {
   if (!state.data) return null;
   const { bundle, workspace } = state.data,
     context = {
+      engineVersion: bundle.engineVersion,
       cutoff: bundle.cutoff,
       currency: filters.currency,
       horizon: filters.horizon,
@@ -67,7 +68,6 @@ export default function Assistant() {
     <div className="grid gap-5">
       <PageHeader
         title="Asistente de tesorería"
-        subtitle="Respuestas explicables, con el mismo cálculo y fuentes a un clic."
       />
       <DecisionControls
         {...filters}

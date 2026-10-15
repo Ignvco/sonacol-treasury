@@ -9,6 +9,7 @@ import { resolveBaseCutoff } from "./cutoff";
 import { erpSheetNames, ERP_PROFILE } from "./erp-profile";
 import { readErp } from "./erp";
 import { nextDate } from "@/financial-engine/base-treasury";
+import { bankControls } from "@/financial-engine/bank-control";
 
 export interface WorkSheetData {
   reading?: BaseReadingSummary;
@@ -39,8 +40,11 @@ export async function parseWorkbook(buffer: ArrayBuffer, baseOnly = true): Promi
     throw new Error("El contenido no corresponde a un libro Excel válido. Abre el archivo en Excel y guárdalo como .xlsx.");
   const metadata = XLSX.read(buffer, { type: "array", bookSheets: true });
   const hasBase = metadata.SheetNames.some(n => n.trim().toUpperCase() === "BASE");
-  const erpNames = baseOnly && !hasBase ? erpSheetNames(metadata.SheetNames) : null;
-  const baseName = baseOnly && !erpNames ? findBaseSheet(metadata.SheetNames) : null;
+  const baseName = baseOnly && hasBase ? findBaseSheet(metadata.SheetNames) : null;
+  const erpNames = baseOnly && !hasBase ? erpSheetNames(XLSX.read(buffer, {
+    type: "array", sheetRows: 50, dense: false, cellDates: false,
+    bookVBA: false, cellFormula: false, sheetStubs: false, cellStyles: false,
+  })) : null;
   const wb = XLSX.read(buffer, {
     ...(baseName ? { sheets: [baseName] } : erpNames ? { sheets: [...erpNames.values()] } : {}),
     type: "array", dense: false, cellDates: false, bookVBA: false,
@@ -102,11 +106,26 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
         });
         if (isErp && reading) {
           if (!record.normalized.currency) record.normalized.currency = reading.localCurrency;
-          Object.assign(record.normalized, { company: reading.company, periodStart: reading.periodStart, localCurrency: reading.localCurrency, coverageSheets: ["BANCOS", "CLIENTES", "COLOCACIONES"] });
+          Object.assign(record.normalized, { company: reading.company, periodStart: reading.periodStart, localCurrency: reading.localCurrency, coverageSheets: ["BANCOS", "CLIENTES", "COLOCACIONES", ...(sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS") ? ["SALDOS BANCOS"] : [])] });
           if (String(record.normalized.recordRole).endsWith("_opening") && reading.periodStart && !reading.cutoffIssue)
             record.normalized.date = nextDate(reading.periodStart, -1);
           const date = record.normalized.date;
           const issues: string[] = [];
+          const monthlyBanks = sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS");
+          if (monthlyBanks && record.normalized.sourceOrigin === "BANCO") {
+            const monthStart = reading.cutoff ? `${reading.cutoff.slice(0, 7)}-01` : null;
+            if (reading.periodStart !== monthStart) issues.push("SALDOS BANCOS es apertura mensual: declara el primer día del mes del corte como inicio bancario.");
+            if (record.normalized.recordRole === "bank_opening") {
+              const sourceDate = record.normalized.openingDate;
+              if (monthStart && sourceDate && sourceDate !== monthStart && sourceDate !== nextDate(monthStart, -1))
+                issues.push("La fecha informada de apertura no corresponde al inicio del mes ni al cierre del mes anterior.");
+              // date is the accounting baseline, not an invented date in the source.
+              // An absent ERP openingDate stays null; the declared period is explicit.
+              Object.assign(record.normalized, { openingBasis: "monthly_opening", openingMonth: monthStart?.slice(0, 7) ?? null });
+            }
+            if (record.normalized.recordRole === "bank_movement" && date && reading.cutoff && String(date) > reading.cutoff)
+              issues.push("Movimiento posterior al corte declarado.");
+          }
           if (record.normalized.currency !== reading.localCurrency) issues.push("La moneda de la fila no coincide con la moneda local declarada.");
           if (String(record.normalized.recordRole).endsWith("_movement") && date && reading.periodStart && String(date) < reading.periodStart)
             issues.push(`Movimiento del ${date} anterior al inicio ${reading.periodStart}; corrige el inicio del mayor de ${sheet.name}.`);
@@ -168,6 +187,11 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
       records.push({ sheet: sheet.name, row: rowNumbers[i], status, entityType, normalized: n, raw,
         warnings: status === "DUPLICATE" ? "Fila idéntica a otra del archivo." : issues.map((x) => x.message).join(" · "), dedupeKey });
       if (records.length > MAX_IMPORT_ROWS) throw new Error(`El libro supera ${MAX_IMPORT_ROWS.toLocaleString("es-CL")} filas. Divídelo en archivos más pequeños.`);
+    }
+  }
+  for (const control of bankControls(records)) if (control.issues.length) {
+    for (const record of records.filter(r => r.normalized.sourceOrigin === "BANCO" && r.normalized.ledgerCode === control.ledger && r.normalized.currency === control.currency)) {
+      record.status = "ERROR"; record.warnings = [...new Set([record.warnings, ...control.issues].filter(Boolean))].join(" · ");
     }
   }
   return { fileName: "", sheets: sheetResults, total: records.length,

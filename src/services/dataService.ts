@@ -177,6 +177,8 @@ const toCashFlow = (r: any): CashFlow => ({
   importRecordId: r.import_record_id,
 });
 const toInvestment = (r: any): Investment => ({
+  maturityEntries: r.maturity_entries,
+  maturityCutoff: r.maturity_cutoff,
   id: r.id,
   bankId: r.bank_id ?? "",
   type: r.type,
@@ -229,6 +231,8 @@ export const dataService = {
       bundle.cutoff,
       366,
       "CLP",
+      "",
+      bundle.engineVersion,
     );
     const accounts: BankAccount[] = base.positions.map((p) => ({
       id: p.key,
@@ -459,6 +463,8 @@ export const dataService = {
           id: r.id,
           bank_id: r.bank,
           type: n.investmentType ?? "colocacion",
+          maturity_entries: n.maturityEntries,
+          maturity_cutoff: n.maturityCutoff,
           amount: r.amount,
           currency: r.currency,
           start_date: n.startDate ?? r.date,
@@ -494,6 +500,8 @@ export const dataService = {
         batchId: r.batchId,
         revision: r.revision,
         edited: r.edited,
+        executedAmount: Number(r.normalized?.executedAmount ?? 0),
+        bankLedger: r.settlementLedger || r.ledger,
       }));
   },
   async getPayments(): Promise<Payment[]> {
@@ -611,6 +619,7 @@ export const dataService = {
         category: p.category,
         status: p.status,
         bank: p.bankId ?? "Sin banco",
+        bankLedger: p.bankLedger || null,
       },
       p_delete: remove,
     });
