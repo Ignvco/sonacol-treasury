@@ -123,7 +123,6 @@ export default function Projections() {
     <div className="flex flex-col gap-5 t-fade-in">
       <PageHeader
         title="Proyecciones"
-        subtitle="Planifica ingresos y egresos; vincula su ejecución bancaria. Los compromisos se conservan al actualizar ERP."
         actions={
           canWrite && bundle.batch ? (
             <button

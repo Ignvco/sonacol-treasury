@@ -40,7 +40,7 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
       columns[key] = matches[0][0];
     }
     if (kind === "COLOCACIONES") {
-      const matches = [...rows.get(header)!].filter(([, c]) => headerKey(text(c)) === "fechadevencimiento");
+      const matches = [...rows.get(header)!].filter(([, c]) => ["fechadevencimiento", "fechavencimiento"].includes(headerKey(text(c))));
       if (matches.length > 1) throw new Error(`${name}: Fecha de Vencimiento duplicada.`);
       if (matches.length) columns.endDate = matches[0][0];
     }
@@ -49,6 +49,10 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
     let bankLedger = "", bank = "", bankCurrency = "", skipped = 0;
     const bankGroups = new Set<string>();
     const balances = new Map<string, number>();
+    // Some single-account ERP ledgers omit the account only on the OB line.
+    // Derive it from the explicit account column, never from counterpart or row order.
+    const investmentLedgers = kind === "COLOCACIONES" ? [...new Set(ordered.filter(r => r > header)
+      .map(r => text(rows.get(r)!.get(columns.ledger))).filter(Boolean))] : [];
     for (const row of ordered.filter(r => r > header)) {
       const cells = rows.get(row)!;
       const get = (key: string) => cells.get(columns[key]);
@@ -108,14 +112,20 @@ export function readErp(wb: XLSX.WorkBook, names: Map<ErpSheet, string>): WorkSh
           const debit = number("debit", true), credit = number("credit", true);
           if (debit < 0 || credit < 0 || (debit > 0 && credit > 0)) errors.push("Cargo/Abono inválidos o ambos lados con importe.");
           signed = debit - credit;
-          Object.assign(n, { recordRole: "bank_movement", date: date("date"), dueDate: date("dueDate", true), transaction: required("transaction"), document: value("erpDocument"), erpDocument: value("erpDocument"), reference: value("reference"), series: value("series"), description: value("description"), debe: debit, haber: credit });
+          Object.assign(n, { recordRole: "bank_movement", date: date("date"), dueDate: date("dueDate", true), transaction: required("transaction"), document: required("erpDocument"), erpDocument: value("erpDocument"), folio: value("folio"), reference: value("reference"), series: value("series"), description: value("description"), debe: debit, haber: credit });
         }
         Object.assign(n, { bank, ledgerCode: bankLedger, currency: bankCurrency || moneyCurrency(get("debit")) || moneyCurrency(get("credit")) || "", category: signed < 0 ? "supplier" : "other_income" });
       } else if (kind === "CLIENTES") {
         signed = number("amount");
         Object.assign(n, { recordRole: "invoice", currency: moneyCurrency(get("amount")) ?? "", erpDocument: required("erpDocument"), document: value("folio").replace(/^FE-/, ""), originalFolio: value("folio"), customerCode: required("customerCode"), customer: required("customer"), rut: null, series: value("series"), installment: required("installment"), documentType: required("documentType"), issueDate: date("issueDate"), dueDate: date("dueDate"), originalDueDate: date("dueDate"), description: value("documentType") + " " + value("folio"), category: "collection", status: "por_vencer", bank: null, settlementBank: null });
       } else {
-        const ledger = required("ledger"), opening = value("origin") === "OB";
+        const opening = value("origin") === "OB";
+        const inheritedLedger = opening && !value("ledger") && investmentLedgers.length === 1;
+        const ledger = inheritedLedger ? investmentLedgers[0] : required("ledger");
+        if (inheritedLedger) {
+          n.ledgerSource = "single_explicit_account_in_report";
+          warnings.push("Cuenta de OB obtenida de la única cuenta explícita del mayor; se conserva la celda original vacía.");
+        }
         const balance = number("balance");
         const currency = moneyCurrency(get("balance")) ?? "";
         const balanceKey = ledger;

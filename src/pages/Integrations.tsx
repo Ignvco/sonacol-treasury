@@ -39,7 +39,6 @@ export default function Integrations() {
     <div className="t-fade-in flex flex-col gap-5">
       <PageHeader
         title="Centro de Integraciones"
-        subtitle="Comprueba el origen y los datos guardados en tu plataforma"
         actions={
           <Link className="t-button-primary" to="/importations">
             <FileSpreadsheet size={16} /> Nueva importación

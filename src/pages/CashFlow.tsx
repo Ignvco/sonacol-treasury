@@ -110,7 +110,6 @@ export default function CashFlow() {
     <div className="t-fade-in flex min-w-0 flex-col gap-5">
       <PageHeader
         title="Flujo de caja"
-        subtitle="Serie diaria completa: saldo inicial + ingresos − egresos, filtrable y exportable."
         actions={
           <>
             <Link to="/dashboard" className="t-button-secondary">
@@ -153,8 +152,8 @@ export default function CashFlow() {
           {issue}
         </p>
       ))}
-      <BankActivity key={[data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
-      <CashPosition key={[data.batch?.id, filters.currency, filters.bank].join(":")} model={model} formatAmount={formatAmount} />
+      <BankActivity key={["bank-activity", data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
+      <CashPosition key={["cash-position", data.batch?.id, filters.currency, filters.bank].join(":")} model={model} formatAmount={formatAmount} />
       <CashFlowBento
         cutoff={data.cutoff}
         to={model.to}

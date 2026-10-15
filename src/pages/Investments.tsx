@@ -163,7 +163,7 @@ export default function Investments() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Portafolio" subtitle="Detalle de inversiones vigentes" bodyClassName="pt-2">
+      <SectionCard title="Portafolio" bodyClassName="pt-2">
         <DataTable<Investment>
           data={items}
           rowKey={(i) => i.id}

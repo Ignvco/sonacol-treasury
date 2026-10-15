@@ -83,7 +83,6 @@ export default function Today() {
     <div className="grid gap-5 t-fade-in">
       <PageHeader
         title="Hoy"
-        subtitle="Lo que exige acción hoy: caja disponible, umbral, cambios y agenda."
         actions={
           <>
             <Link className="t-button-secondary" to="/cashflow">

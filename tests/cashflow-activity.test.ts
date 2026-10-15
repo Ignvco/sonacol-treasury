@@ -88,9 +88,13 @@ test("daily, weekly and monthly buckets preserve exact cents, first opening and 
  assert.equal(aggregateProjection(rows, "daily"), rows);
 });
 
-test("historic snapshots exclude other batches and a new ERP refresh does not accumulate period expenses", async () => {
- const wb = erpWithBankBalances(); wb.Sheets.BANCOS.J2.v = "CLP 300.000";
+test("historic snapshots stay fixed while a refresh adds only the new period expense", async () => {
+ const wb = erpWithBankBalances();
  const records = processWorkbook(await parseWorkbook(workbookBytes(wb)), undefined, { ERP: { ...erpContext.ERP, cutoffDate: "2026-09-11" } }).records;
+ const additional = structuredClone(records.find(r => r.normalized.recordRole === "bank_movement" && r.normalized.type === "expense")!);
+ additional.row = 4;
+ Object.assign(additional.normalized, { transaction: "102", document: "JE 03", erpDocument: "JE 03", date: "2026-09-11", dueDate: "2026-09-11", amount: 100000, signedAmount: -100000, haber: 100000 });
+ additional.raw = {}; records.push(additional);
  const b = await importErp(db, "ERP-new.xlsm", records);
  const current: RawSnapshot = await query(db, "select get_daily_base_snapshot($1) s", [b.id]);
  const p = snapshotProjection({ rows: snapshotRows(current), links: current.links, cutoff: current.batch!.cutoff });

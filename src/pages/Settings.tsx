@@ -134,7 +134,6 @@ export default function Settings() {
     <div className="t-fade-in flex flex-col gap-5">
       <PageHeader
         title="Configuración"
-        subtitle="Parámetros, preferencias, roles y auditoría"
         actions={
           <Link className="t-button-primary" to="/security">
             Seguridad y tasas
@@ -272,7 +271,6 @@ export default function Settings() {
 
           <SectionCard
             title="Usuarios y roles"
-            subtitle="Cuentas registradas en el sistema"
             bodyClassName="pt-2"
           >
             {users && users.length > 0 ? (
@@ -398,7 +396,6 @@ export default function Settings() {
       {/* Audit */}
       <SectionCard
         title="Registro de Auditoría"
-        subtitle="Trazabilidad de acciones del equipo"
         action={
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft text-brand-dark">
             <Building2 className="h-4 w-4" strokeWidth={1.8} />

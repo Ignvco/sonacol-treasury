@@ -19,8 +19,8 @@ export function OperatingRules({ snapshot, canWrite }: { snapshot: RawSnapshot; 
     finally { setBusy(false); }
   };
   return <section className="rounded-xl border bg-card p-4 text-sm" aria-label="Operación de caja">
-    <p className="font-semibold">La plataforma construye tu caja con ERP y tus decisiones</p>
-    <p className="mt-2 text-muted-foreground">La actualización ERP conserva tu plan de cobros, pagos, reglas y rescates. Incorpora la planificación inicial una vez y gestiona aquí sus cambios y ejecuciones; el flujo diario, el resumen y los reportes utilizan los importes pendientes.</p>
+    <p className="font-semibold">Reglas operativas</p>
+    <p className="mt-2 text-muted-foreground">Cobros, pagos y rescates pendientes del corte seleccionado.</p>
     <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2"><span>{rules.length} reglas activas</span><span>{clientsWithoutBank.size} clientes sin cuenta receptora</span><span>{unclassified} movimientos sin clasificar</span></div>
     {canInitialize && <div className="mt-3"><p className="mb-2">Puedes iniciar con cobranza a 5 días naturales y clasificación por descripción. Se incorporan los tipos de regla todavía sin configurar; tus reglas existentes se conservan.</p><button className="t-button-secondary" disabled={busy} onClick={() => void initialize()}>{busy ? "Activando…" : "Activar reglas iniciales"}</button></div>}
     {error && <p role="alert" className="mt-2 text-danger">{error}</p>}

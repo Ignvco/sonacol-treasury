@@ -27,7 +27,19 @@ project-root/
 
 ## Directory Responsibilities
 
-- **supabase/migrations/20261013010000000_daily_openings_maturities.sql**: Daily opening validation for new ERP imports, compatibility validation adapter, and source maturity evidence on existing position identities. No historical/manual rewrites.
+- **supabase/migrations/20261014000000000_monthly_incremental_erp.sql**: Monthly opening validation and append-only banking import identities with audited results; retains historical source rows and operational relationships.
+- **src/pages/importations/ErpIncrementalSummary.tsx**: Server-confirmed import counts, retained postings, blocking differences and monthly account controls in preview and results.
+- **tests/erp-monthly-incremental.test.ts**: Monthly date contract, banking idempotence, partial updates, source ambiguity, reconciliation/execution preservation, rollback and BIFF maturity regressions.
+- **config/locales-plugin.ts**, **src/types/virtual-locales.d.ts**: Typed Vite virtual module bundling canonical public translations synchronously; watches locale changes without importing public assets as JavaScript.
+- **tests/locales.test.ts**: Loads the canonical translations through real Vite dev/build pipelines and checks all keys with i18next language switching.
+- **tests/browser/erp-incremental.spec.ts**: Browser acceptance for monthly refresh counts, retained expenses, correction blockers, mobile layout and translated navigation.
+- **docs/erp-monthly-incremental.md**: Current monthly ERP contract, real-file audit, migration instructions, validation results and unresolved source differences.
+
+- **src/pages/help/index.tsx**, **src/pages/help/chapters.ts**: Independent, searchable Spanish user guide with a chapter index and links to existing modules. No operational data writes, onboarding overlays or new dependencies.
+- **docs/ui-refinement.md**: Visual audit, scope and validation record for the presentation-only refinement.
+- **tests/browser/help.spec.ts**: Guide search/navigation and all-route desktop/mobile presentation checks using an isolated database.
+
+- **supabase/migrations/20261013010000000_daily_openings_maturities.sql**: Historical daily-opening contract and source maturity evidence. The monthly migration supersedes its opening validation; retain both migration files and historical data.
 - **src/components/treasury/InvestmentMaturities.tsx**: Native-currency ERP maturity ledger, cutoff-relative alerts, authorized export and shared source evidence for investments/rescue planning. Does not allocate withdrawals to invented lots.
 
 - **src/financial-engine/cash-equivalence.ts**: Optional same-cut, single-currency closure comparison against independently declared reference totals; validates the reference equations and bank control without mutating operational data.

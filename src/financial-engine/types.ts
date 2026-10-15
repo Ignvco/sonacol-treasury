@@ -232,6 +232,7 @@ export type ImportEntityType =
   | "unknown";
 
 export interface ImportBatch {
+  incremental?: import("@/import-engine/types").ErpIncrementalResult;
   importedRecords?: number | null;
   id: string;
   fileName: string;

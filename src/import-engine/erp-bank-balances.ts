@@ -46,7 +46,7 @@ export function readErpBankBalances(wb: XLSX.WorkBook, name: string) {
       if (isErrorCell(cell) || (cell?.f && cell.v == null)) errors.push(`${XLSX.utils.encode_col(col)}${row}: error o fórmula sin resultado (${key}).`);
     }
     const n = { sourceProfile: ERP_PROFILE, sourceOrigin: "BANCO", sourceSheet: name, recordRole: "bank_opening", bankBalanceSource: "SALDOS BANCOS", company: "SONACOL", currency, currencyKnown: true,
-      ledgerCode: ledger, bank, date: null, openingDate, openingDateSource: columns.openingDate === undefined ? "declared_daily_cutoff" : `${name}!${XLSX.utils.encode_col(columns.openingDate)}${row}`, openingBasis: "daily_opening", periodStart: null, reportDate: null, adjustedDate: null, status: "confirmado", entityType: "cash_flow",
+      ledgerCode: ledger, bank, date: null, openingDate, openingDateSource: columns.openingDate === undefined ? "declared_month" : `${name}!${XLSX.utils.encode_col(columns.openingDate)}${row}`, openingBasis: "monthly_opening", periodStart: null, reportDate: null, adjustedDate: null, status: "confirmado", entityType: "cash_flow",
       description: "Saldo de apertura · " + bank, category: "other_income", amount: Math.abs(opening ?? 0), signedAmount: opening ?? 0, type: (opening ?? 0) < 0 ? "expense" : "income",
       bankReportedClosing: closing, sourceId: `ERP:BANK-OPENING:${ledger}` };
     const raw = Object.fromEntries([...cells].map(([c, v]) => [`${XLSX.utils.encode_col(c)}${row} · ${cellText(rows.get(header)!.get(c))}`, { value: v.v ?? null, type: v.t, formula: v.f ?? null }]));

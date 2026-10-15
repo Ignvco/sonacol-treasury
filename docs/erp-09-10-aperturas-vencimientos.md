@@ -1,5 +1,7 @@
 # Auditoría ERP 09-10: aperturas y vencimientos
 
+> Documento histórico. La aclaración posterior define SALDOS BANCOS como apertura **mensual**, no diaria. Para nuevas cargas se aplica [el contrato mensual e incremental](erp-monthly-incremental.md) y la migración `20261014000000000_monthly_incremental_erp.sql`. Se conserva esta auditoría como registro de la entrega anterior; sus instrucciones de apertura diaria quedan sustituidas.
+
 Fuente: `ERP 09-10.xls`, entregado por Ignacio el 13/10/2026. SHA-256 `2472fc3d9b671730feb3eef61715d46afc41fbc4d4cd9bd14b718b3c0eaf2c76`.
 Base de código: rama `feat/erp-native-operations`, commit `8bf0872` (patch 4).
 

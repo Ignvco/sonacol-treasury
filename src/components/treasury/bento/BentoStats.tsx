@@ -77,7 +77,7 @@ function StatTile({ stat, index }: { stat: BentoStat; index: number }) {
         {stat.subtext && (
           <p
             className={cn(
-              "mt-1.5 line-clamp-2 text-[11px] leading-snug",
+              "mt-1.5 text-xs leading-relaxed",
               tinted ? "text-foreground/70" : "text-muted-foreground",
             )}
           >
@@ -136,7 +136,7 @@ export function BentoStats({
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/10 blur-3xl"
+          className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-transparent"
         />
         <div className="flex items-start justify-between gap-3">
           <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/60">

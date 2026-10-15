@@ -85,7 +85,6 @@ export default function Reports() {
     <div className="grid gap-5">
       <PageHeader
         title="Informe ejecutivo"
-        subtitle="Cifras, proyección y trazabilidad desde el mismo cálculo de la plataforma."
         actions={
           user?.canExport && bundle.batch ? (
             <div className="flex gap-2">

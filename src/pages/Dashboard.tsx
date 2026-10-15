@@ -60,11 +60,7 @@ export default function Dashboard() {
     <div className="t-fade-in min-w-0 space-y-6">
       <PageHeader
         title="Resumen"
-        subtitle={
-          "Foto ejecutiva de la caja al " +
-          data.cutoff +
-          ": composición, tendencia y detalle diario. Selecciona cualquier cifra para revisar su origen."
-        }
+        subtitle={"Caja al " + data.cutoff}
         actions={
           <>
             <Link to="/today" className="t-button-secondary">

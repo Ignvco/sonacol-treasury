@@ -25,7 +25,7 @@ export function SectionCard({
       {...props}
     >
       {(title || action) && (
-        <header className="flex items-start justify-between gap-4 px-5 pb-4 pt-5">
+        <header className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
           <div className="min-w-0">
             {title && (
               <h3 className="text-[14px] font-semibold tracking-tight text-foreground">
@@ -36,10 +36,10 @@ export function SectionCard({
               <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>
             )}
           </div>
-          {action && <div className="shrink-0">{action}</div>}
+          {action && <div className="flex max-w-full flex-wrap gap-2">{action}</div>}
         </header>
       )}
-      <div className={cn("min-w-0 flex-1 px-5 pb-5", bodyClassName)}>{children}</div>
+      <div className={cn("min-w-0 flex-1 px-4 pb-4 sm:px-5 sm:pb-5", bodyClassName)}>{children}</div>
     </section>
   );
 }

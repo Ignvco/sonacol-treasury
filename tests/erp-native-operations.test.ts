@@ -53,19 +53,27 @@ test("empty installation operates from ERP alone: native rules, manual payments,
     const frozen = await query(db, "select treasury_freeze_forecast($1,$2,$3::jsonb) s", [b.id, revision, JSON.stringify({ cutoff: snap.batch!.cutoff, currency: "CLP", horizon: 30, minimum: 0, engineVersion: snap.engineVersion })]);
     const pac = snap.business!.find(d => d.values_json.contains === "PAGO PAC")!;
     await save("rule", pac.target_key, pac.values_json, pac, true);
-    await save("redemption", rescue.target_key, { ...rescue.values_json, status: "executed" }, rescue);
+    await assert.rejects(save("redemption", rescue.target_key, { ...rescue.values_json, status: "executed" }, rescue), /ejecución|movimiento/i);
+    const receipt = snap.rows.find(r => r.normalized.description === "ABONO COPEC")!;
+    await query(db, "select treasury_record_redemption_execution($1,$2,$3,$4,500,null) s", [b.id, rescue.id, rescue.revision, receipt.recordId]);
+    const linkedRescue = (await migrationSnapshot(db, b.id)).business!.find(r => r.id === rescue.id)!;
+    await save("redemption", linkedRescue.target_key, { ...linkedRescue.values_json, status: "executed" }, linkedRescue);
     const next = structuredClone(records); next.forEach(r => { r.normalized.cutoffDate = "2026-09-11"; });
-    const posting = next.find(r => r.normalized.description === "ABONO COPEC")!; posting.normalized.description = "Movimiento desconocido";
+    const posting = next.find(r => r.normalized.description === "COLOCACIONES")!; posting.normalized.description = "Movimiento desconocido";
     const newInvoice = structuredClone(next.find(r => r.entityType === "invoice")!); newInvoice.row += 1;
     Object.assign(newInvoice.normalized, { erpDocument: "901", document: "501", originalFolio: "FE-501" }); next.push(newInvoice);
     const later = await importErp(db, "ERP-next.xlsx", next), carried = await migrationSnapshot(db, later.id);
     assert.equal(carried.business!.filter(d => d.kind === "rule").length, 16); // 15 starter + customer policy; retired PAC stays retired.
     assert.equal(carried.manual.filter(r => r.normalized.description === "Pago creado en plataforma").length, 1);
-    assert.equal(carried.manual.filter(r => r.normalized.recordRole === "planned_redemption").length, 0);
+    const executedRescue = carried.manual.find(r => r.id === rescue.id)!;
+    assert.equal(executedRescue.normalized.executedAmount, 500);
+    assert.equal(carried.business!.find(r => r.id === rescue.id)!.values_json.status, "executed");
+    assert.equal(baseTreasury(snapshotRows(carried), carried.links, carried.batch!.cutoff, 30, "CLP").events.some(r => r.id === rescue.id), false);
     assert.equal(carried.rows.find(r => r.kind === "invoice" && r.normalized.document === "501")!.normalized.reportDate, "2026-09-27");
     assert.equal(carried.rows.find(r => r.id === invoice.id)!.normalized.adjustedDate, "2026-09-28");
-    assert.equal(carried.rows.find(r => r.normalized.description === "Movimiento desconocido")!.normalized.category, "unclassified");
-    assert.equal(baseTreasury(snapshotRows(carried), carried.links, carried.batch!.cutoff, 30, "CLP").available, 1300); // Marking executed never fabricates a bank receipt.
+    // The unallocated EXPENSE retains the raw ERP supplier fallback when no rule matches.
+    assert.equal(carried.rows.find(r => r.normalized.description === "Movimiento desconocido")!.normalized.category, "supplier");
+    assert.equal(baseTreasury(snapshotRows(carried), carried.links, carried.batch!.cutoff, 30, "CLP").available, 1300); // Linked receipt is already in cash; execution never counts it twice.
     assert.deepEqual((await query(db, "select snapshot s from treasury_forecasts where id=$1", [frozen.id])).business, frozen.snapshot.business);
     assert.equal((await importErp(db, "ERP-same-content.xlsx", next)).id, later.id);
   } finally { await db.close(); }

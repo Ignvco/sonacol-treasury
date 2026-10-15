@@ -39,7 +39,7 @@ export function BentoGaugeCard({
         subtitle={subtitle}
         trailing={trailing}
       />
-      <div className="mt-5 rounded-[22px] bg-gradient-brand-soft p-4 sm:p-5">
+      <div className="mt-5 rounded-2xl bg-brand-soft p-4 sm:p-5">
         <div className="flex justify-center">
           <BentoGauge ratio={ratio} />
         </div>

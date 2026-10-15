@@ -79,7 +79,7 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
       cutoff: data.batch?.cutoff ?? n.cutoffDate ?? "",
       fileName: n.removedSourceFile
         ? String(n.removedSourceFile) + " (origen eliminado)"
-        : r.fileName,
+        : String(n.sourceFileName ?? r.fileName),
       row: r.row ?? n.removedSourceRow ?? null,
       recordId: r.recordId,
       normalized: n,

@@ -105,7 +105,17 @@ export interface ErpRefreshReview {
     state: "uncovered_account" | "before_period" | "missing_movement" | "changed_movement" | "overallocated" | "ambiguous_duplicate";
   }[];
 }
-export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;uncoveredCurrencies?:string[];refreshReview?:ErpRefreshReview;}
+export interface ErpIncrementalResult {
+ mode: "monthly_incremental"; state: "preview" | "completed";
+ cutoff: string; periodStart: string; movementsRead: number; newMovements: number; existingMovements: number;
+ retainedMovements: number; retainedNet: number; rejected: number; ambiguous: number; blocking: boolean;
+ recognizedPrevious?: number; reusedSnapshot?: boolean;
+ retainedDetails?: { sourceKey: string; ledger: string; date: string; document: string; signedAmount: number; currency: string; fileName: string; sheet: string; row: number }[];
+ issues: { sourceKey?: string; ledger?: string; document?: string; date?: string; state: string; message: string }[];
+ openings: { ledger: string; bank: string; currency: string; periodStart: string; cutoff: string; opening: number;
+  income: number; expense: number; calculated: number; reported: number | null; difference: number | null }[];
+}
+export interface ImportComparison {revision:string;rows:ImportComparisonRow[];cutoff?:string;historical?:boolean;removed?:number;uncoveredCurrencies?:string[];refreshReview?:ErpRefreshReview;incremental?:ErpIncrementalResult;}
 export interface ImportPreview extends ImportSummary { fileHash: string; comparison?:ImportComparison; comparisonError?:string; }
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 20000;

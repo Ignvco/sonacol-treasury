@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useAsyncData } from "@/hooks/use-async";
 import { importService, type ImportProgress } from "@/services/importService";
 import { ImportPreview } from "./importations/ImportPreview";
+import { ErpIncrementalSummary } from "./importations/ErpIncrementalSummary";
 import { DeleteImportsDialog } from "./importations/DeleteImportsDialog";
 import { ExcelFileManagement } from "./importations/ExcelFileManagement";
 import type {
@@ -149,7 +150,9 @@ export default function Importations() {
       setStatusFilter("");
       if (batch.status === "completed")
         toast.success("Importación confirmada", {
-          description: `${batch.importedRecords ?? 0} filas guardadas · ${batch.duplicateRecords} sin cambios u omitidas.`,
+          description: batch.incremental
+            ? `${batch.incremental.newMovements} movimientos nuevos · ${batch.incremental.existingMovements} ya registrados · ${batch.incremental.retainedMovements} conservados.`
+            : `${batch.importedRecords ?? 0} filas guardadas · ${batch.duplicateRecords} sin cambios u omitidas.`,
         });
       else
         toast.warning("Revisa el resultado de la importación", {
@@ -176,7 +179,6 @@ export default function Importations() {
     <div className="t-fade-in flex min-w-0 flex-col gap-6">
       <PageHeader
         title="Importaciones"
-        subtitle="Datos ERP, decisiones manuales y seguimiento de importaciones"
         actions={
           canWrite && (
             <a className="t-button-secondary" href="#excel-file-management">
@@ -364,6 +366,7 @@ export default function Importations() {
           }}
         />
       )}
+      {!preview && <ErpIncrementalSummary result={selected?.incremental} />}
       <BentoStats
         items={[
           {

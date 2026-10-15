@@ -189,7 +189,7 @@ export function DataTable<T>({
 
       <div className="max-h-[560px] max-w-full overflow-auto rounded-[16px] border border-border">
         <table className="w-full border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-sunken shadow-sm">
+          <thead className="sticky top-0 z-10 bg-sunken">
             <tr className="border-b border-border">
               {shown.map((col) => (
                 <th
@@ -203,7 +203,7 @@ export function DataTable<T>({
                       : undefined
                   }
                   className={cn(
-                    "whitespace-nowrap px-4 py-3.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/80",
+                    "whitespace-nowrap px-4 py-3 text-xs font-medium text-muted-foreground",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     col.hideBelow === "md" && "hidden md:table-cell",

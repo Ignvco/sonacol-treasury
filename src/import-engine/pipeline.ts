@@ -111,16 +111,20 @@ export function processWorkbook(sheets: WorkSheetData[], onProgress?: (done: num
             record.normalized.date = nextDate(reading.periodStart, -1);
           const date = record.normalized.date;
           const issues: string[] = [];
-          const dailyBanks = sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS");
-          if (dailyBanks && record.normalized.sourceOrigin === "BANCO") {
-            if (reading.periodStart !== reading.cutoff) issues.push("SALDOS BANCOS es apertura diaria: el inicio bancario debe coincidir con el corte. No se aplicarán movimientos de otro día.");
+          const monthlyBanks = sheets.some(s => s.reading?.erpReport === "SALDOS BANCOS");
+          if (monthlyBanks && record.normalized.sourceOrigin === "BANCO") {
+            const monthStart = reading.cutoff ? `${reading.cutoff.slice(0, 7)}-01` : null;
+            if (reading.periodStart !== monthStart) issues.push("SALDOS BANCOS es apertura mensual: declara el primer día del mes del corte como inicio bancario.");
             if (record.normalized.recordRole === "bank_opening") {
-              const openingDate = record.normalized.openingDate ?? reading.cutoff;
-              if (openingDate !== reading.cutoff) issues.push("La fecha de apertura no coincide con el corte. Se requiere una carga independiente para cada día; no se acumulan aperturas.");
-              Object.assign(record.normalized, { date: openingDate, openingDate });
+              const sourceDate = record.normalized.openingDate;
+              if (monthStart && sourceDate && sourceDate !== monthStart && sourceDate !== nextDate(monthStart, -1))
+                issues.push("La fecha informada de apertura no corresponde al inicio del mes ni al cierre del mes anterior.");
+              // date is the accounting baseline, not an invented date in the source.
+              // An absent ERP openingDate stays null; the declared period is explicit.
+              Object.assign(record.normalized, { openingBasis: "monthly_opening", openingMonth: monthStart?.slice(0, 7) ?? null });
             }
-            if (record.normalized.recordRole === "bank_movement" && record.normalized.date !== reading.cutoff)
-              issues.push("Movimiento fuera del día de apertura: conserva el histórico en su propia carga y exporta los movimientos de esta jornada.");
+            if (record.normalized.recordRole === "bank_movement" && date && reading.cutoff && String(date) > reading.cutoff)
+              issues.push("Movimiento posterior al corte declarado.");
           }
           if (record.normalized.currency !== reading.localCurrency) issues.push("La moneda de la fila no coincide con la moneda local declarada.");
           if (String(record.normalized.recordRole).endsWith("_movement") && date && reading.periodStart && String(date) < reading.periodStart)

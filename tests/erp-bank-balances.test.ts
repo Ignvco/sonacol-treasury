@@ -71,14 +71,14 @@ test("reported closing is a control, never a second posting; differences include
  assert.ok(bad.records.filter(r => r.normalized.ledgerCode === "BANK-01").every(r => r.status === "ERROR"));
 });
 
-test("legacy opening present alongside SALDOS is checked once, with conflicting sources rejected", async () => {
+test("two opening sources are rejected even when their amounts agree", async () => {
  const wb = erpWithBankBalances();
  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets.BANCOS, { header: 1 });
  rows.splice(1, 0, ["Activos", "BANK-01", null, null, null, null, null, "Banco de prueba", "CLP 1.000.000"]);
  wb.Sheets.BANCOS = XLSX.utils.aoa_to_sheet(rows);
- assert.equal(bankControls((await parse(wb)).records)[0].calculated, 1300000);
+ await assert.rejects(parse(wb), /apertura con importe además de SALDOS BANCOS/);
  wb.Sheets.BANCOS.I2.v = "CLP 999";
- await assert.rejects(parse(wb), /no coincide con SALDOS BANCOS/);
+ await assert.rejects(parse(wb), /apertura con importe además de SALDOS BANCOS/);
 });
 
 test("SQL, classified snapshot, projection opening and executive report retain exactly the bank equation", async () => {
@@ -113,7 +113,7 @@ test("server independently rejects missing openings, positive expenses, forged c
  await reject(rows => { rows.find(r => r.normalized.haber === 200000)!.normalized.type = "income"; }, /signo|tipo|importe/i);
  await reject(rows => { rows.find(r => r.normalized.haber === 200000)!.normalized.signedAmount = 200000; }, /signo|Cargo|importe/i);
  await reject(rows => { rows.find(r => r.normalized.recordRole === "bank_opening")!.normalized.bankReportedClosing = 1; }, /BANK-01.*2026-09-01.*1300000.*1299999/);
- await reject(rows => { rows.find(r => r.normalized.recordRole === "bank_movement")!.normalized.periodStart = "2026-09-02"; }, /período/i);
+ await reject(rows => { rows.find(r => r.normalized.recordRole === "bank_movement")!.normalized.periodStart = "2026-09-02"; }, /primer día del mes/i);
  await reject(rows => { rows.find(r => r.normalized.recordRole === "bank_opening")!.normalized.bankBalanceSource = "BANCOS"; }, /fuente del saldo|sin apertura/);
  await session(db, reader); await assert.rejects(importErp(db, "forbidden.xlsm", p.records), /pendiente|rol/); await session(db);
 });

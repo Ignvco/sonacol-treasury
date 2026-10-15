@@ -178,7 +178,7 @@ La búsqueda global (botón de lupa o Ctrl/⌘ K) recorre documentos, clientes, 
 ### ERP crudo: operación
 
 1. Selecciona ERP.xlsm con las hojas **BANCOS, CLIENTES y COLOCACIONES**. El perfil valida los encabezados conocidos y acepta columnas reordenadas. Un libro con BASE utiliza el perfil CAJA; no se mezclan ambos contratos.
-2. Declara empresa, moneda local, fecha de corte e inicio de **cada** mayor. El período de bancos puede diferir del período de inversiones. La apertura corresponde al día anterior al inicio de su mayor; la última transacción no acredita la fecha de extracción.
+2. Declara empresa, moneda local, fecha de corte e inicio de **cada** mayor. Con SALDOS BANCOS, el inicio bancario es el primer día del mes del corte y la apertura es el cierre del mes anterior. El mayor de inversiones conserva su propio período. La última transacción no acredita la fecha de extracción. Véase el contrato mensual vigente en la sección 37.
 3. Pulsa **Aplicar cobertura y comparar**. Revisa coordenadas hoja/fila, aperturas, movimientos, monedas ausentes y cambios. Modificar el contexto exige comparar otra vez.
 4. Confirma el conjunto completo. Una inconsistencia de estructura, fecha, importe o saldo acumulado impide reemplazar los datos aceptados.
 5. Abre **Planificación y reglas** para gestionar cobros, clasificaciones y rescates. Los movimientos adicionales siguen en **Proyecciones**.
@@ -1118,9 +1118,9 @@ En la versión revisada, el lector ERP ya usaba **Cargo − Abono**. Los problem
 | COLOCACIONES | Mayor y saldos acumulados de inversiones | Posiciones y rescates programados; no es una segunda fuente de aperturas bancarias |
 | Plataforma | Clasificaciones, ajustes, compromisos y reglas | Decisiones separadas de los hechos importados; una categoría nunca cambia el signo bancario |
 
-**Saldo calculado = saldo inicial + total Cargo − total Abono.** El motor valida importe absoluto, signo y tipo ingreso/egreso. La apertura no aparece como ingreso del período ni se vuelve a proyectar. Cada exportación aceptada es una fotografía completa: no se suman fotografías de días distintos.
+**Saldo calculado = saldo inicial + total Cargo − total Abono.** El motor valida importe absoluto, signo y tipo ingreso/egreso. La apertura no aparece como ingreso del período ni se vuelve a proyectar. Desde la sección 37, cada fotografía mensual aceptada incluye también los movimientos anteriores que falten en el nuevo archivo. No se suman fotografías de días distintos.
 
-Si SALDOS BANCOS está presente, sus aperturas son la fuente. Una cabecera Activos adicional debe coincidir y no se vuelve a sumar; una contradicción bloquea la lectura. Los archivos anteriores con aperturas Activos mantienen compatibilidad. Una hoja SALDOS BANCOS mal formada, una apertura vacía, una cuenta repetida, un movimiento sin apertura, monedas incompatibles o períodos inconsistentes producen errores explícitos. No se interpreta una celda vacía como cero.
+Si SALDOS BANCOS está presente, sus aperturas son la fuente mensual. Una cabecera Activos adicional con importe bloquea la lectura aunque coincida: dos fuentes de apertura requieren aclaración y nunca se suman. Las etiquetas de grupo sin importe son válidas. Los archivos anteriores con aperturas Activos mantienen compatibilidad antes de adoptar el control mensual. Una hoja SALDOS BANCOS mal formada, una apertura vacía, una cuenta repetida, un movimiento sin apertura, monedas incompatibles o períodos inconsistentes producen errores explícitos. No se interpreta una celda vacía como cero.
 
 ### Control visible y alcance de la validación
 
@@ -1426,7 +1426,7 @@ Sin pruebas, lint, compilación ni migraciones ejecutadas por solicitud del usua
 
 ## 36. Patch 4: control de equivalencia del cierre
 
-> Para el contrato diario y los vencimientos explícitos del ERP nuevo, véase `docs/erp-09-10-aperturas-vencimientos.md` y la migración `20261013010000000_daily_openings_maturities.sql`.
+> La auditoría anterior está en `docs/erp-09-10-aperturas-vencimientos.md`. El contrato mensual de la sección 37 sustituye su interpretación diaria de SALDOS BANCOS y conserva el soporte de vencimientos explícitos.
 
 Incremental sobre `9c20d45` (patches 1–3 publicados). No requiere nuevas migraciones, cambios de dependencias ni importación diaria de CAJA.
 
@@ -1443,3 +1443,21 @@ Se corrige también la comparación histórica CAJA/plataforma: un saldo neto co
 La operación diaria se mantiene en ERP más decisiones, compromisos, rescates, colocaciones y reglas nativas. CAJA puede servir de referencia de transición, no se añade como requisito diario. No se eliminan cargas históricas ni los mecanismos de consulta anteriores.
 
 Entrega revisada estáticamente, **sin ejecutar pruebas, lint, TypeScript, compilación ni migraciones**. Pendiente comprobar en ejecución: diferencias compensadas, cuenta distinta dentro del mismo banco, campos vacíos/cero/negativos, cortes incompatibles, monedas, permisos CSV, cambios de carga y advertencias. Sigue pendiente la comparación financiera completa por cuenta y movimiento con ERP/CAJA reales del mismo corte; el control de seis totales no certifica por sí solo toda la funcionalidad financiera ni da por cerrada la migración.
+
+## Guía y presentación
+
+La guía de usuario está disponible en **Datos y control → Guía de usuario** (`/help`). Incluye búsqueda local, índice, procedimientos y glosario. El alcance del refinamiento visual se documenta en `docs/ui-refinement.md`; no requiere migraciones ni cambia cálculos financieros.
+
+## 37. Apertura mensual y actualización incremental ERP
+
+Contrato vigente: **SALDOS BANCOS es apertura mensual; BANCOS contiene movimientos fechados. Caja = apertura mensual + cargos acumulados − abonos acumulados.** El corte del archivo es independiente del primer día del mes. El informe completo, los controles por cuenta y las limitaciones están en [docs/erp-monthly-incremental.md](docs/erp-monthly-incremental.md).
+
+El patch `sonacol-erp-mensual-incremental.patch` parte de `25e5207e15238cdce87da9571c1908b605ce6cfd` más `sonacol-refinamiento-visual.patch` ya aplicado, aunque siga sin commit. No repite el refinamiento visual. Después de comprobar y aplicar el patch, instala **solo** `supabase/migrations/20261014000000000_monthly_incremental_erp.sql`, después de `20261013010000000_daily_openings_maturities.sql`, y luego despliega el frontend actualizado. No vuelvas a ejecutar migraciones instaladas.
+
+Para `ERP 13-10.xls`, usa empresa **SONACOL**, moneda **CLP**, corte **2026-10-13**, inicio bancario **2026-10-01** e inicio de inversiones **2026-09-30**. Si SALDOS BANCOS no informa fecha, el mes se declara en el contexto; su fecha original permanece vacía.
+
+La comparación reconoce movimientos ya registrados e incorpora solo identidades bancarias nuevas. Conserva movimientos omitidos, sus fechas, origen y relaciones; muestra su efecto neto y permite desplegar su detalle. Bloquea aperturas inconsistentes y líneas ambiguas o corregidas de un asiento conocido. El resumen de una carga confirmada contiene contadores del servidor después de completar la transacción. Una repetición sin cambios reutiliza la fotografía y registra el intento exitoso sin añadir movimientos.
+
+**Diferencia real pendiente:** al pasar del ERP 09-10 al 13-10 hay 8 movimientos nuevos, 16 coincidentes y 11 anteriores ausentes con efecto neto **−832.000.000 CLP**. Conservándolos, la caja calculada es **1.368.585.141 CLP**; leyendo únicamente el archivo del 13, es **2.200.585.141 CLP**. Se informa la diferencia y no se borran registros para igualar ambos resultados. Ambos archivos carecen de cierre bancario informado.
+
+El registro bancario independiente sobrevive a la eliminación explícita de fotografías Excel; el diálogo informa sus cantidades. Borrar una fotografía no anula movimientos ni autoriza corregir sus importes. No se reescriben históricos al instalar la migración.
