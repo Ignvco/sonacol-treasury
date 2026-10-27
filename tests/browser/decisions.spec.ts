@@ -168,7 +168,7 @@ test("agenda: recurring MANUAL, single exception, comments and attachment use re
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const restored=await query(db,"select get_daily_base_snapshot() s");
     expect(restored.manual.filter(r=>r.normalized.description==='Arriendo recurrente').map(r=>r.normalized.reportDate).sort()).toEqual(['2026-09-21','2026-10-21','2026-11-21']);
-    await page.getByRole("button", { name: "Agenda visual" }).click();
+    await page.getByRole("button", { name: "Agenda", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Vista", exact: true })
       .selectOption("week");

@@ -4,6 +4,8 @@ import { Plus } from "lucide-react";
 import { useSavedFilters } from "@/hooks/use-saved-filters";
 import { useAsyncData } from "@/hooks/use-async";
 import { useProjectionView } from "@/hooks/use-projection-view";
+import { BankActivity } from "@/components/treasury/BankActivity";
+import { CashPosition } from "@/components/treasury/CashPosition";
 import { dataService } from "@/services/dataService";
 import { PageHeader } from "@/components/treasury/PageHeader";
 import { SectionCard } from "@/components/treasury/SectionCard";
@@ -91,6 +93,7 @@ export default function CashFlow() {
   if (!data || !model) return <NoBaseState />;
   const variation = model.closing.final - model.available;
   const exportRows = projection.map((r) => ({
+    Motor: data.engineVersion ?? "decision-v1",
     BASE: data.batch?.file_name ?? "",
     Corte: data.cutoff,
     "Moneda de cálculo": filters.currency,
@@ -107,7 +110,6 @@ export default function CashFlow() {
     <div className="t-fade-in flex min-w-0 flex-col gap-5">
       <PageHeader
         title="Flujo de caja"
-        subtitle="Serie diaria completa: saldo inicial + ingresos − egresos, filtrable y exportable."
         actions={
           <>
             <Link to="/dashboard" className="t-button-secondary">
@@ -138,6 +140,7 @@ export default function CashFlow() {
           className="rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning"
         >
           {data.warning}
+          <Link to="/planning" className="mt-2 block underline">Revisar plan de cobros y pagos</Link>
         </p>
       )}
       {model.issues.map((issue) => (
@@ -149,10 +152,13 @@ export default function CashFlow() {
           {issue}
         </p>
       ))}
+      <BankActivity key={["bank-activity", data.batch?.id, filters.currency, filters.bank].join(":")} activity={model.bankActivity} formatAmount={formatAmount} />
+      <CashPosition key={["cash-position", data.batch?.id, filters.currency, filters.bank].join(":")} model={model} formatAmount={formatAmount} />
       <CashFlowBento
         cutoff={data.cutoff}
         to={model.to}
         horizon={filters.horizon}
+        includesCutoff={!!model.cutoffPosition}
         mode={mode}
         onModeChange={setMode}
         available={model.available}

@@ -19,10 +19,13 @@ export function useProjectionView(refresh = 0) {
     PROJECTION_DEFAULTS,
   );
   const filters = useMemo(() => projectionFilters(saved), [saved]);
-  const model = useMemo(
-    () => (state.data ? snapshotProjection(state.data, filters) : null),
-    [state.data, filters],
-  );
+  const calculation = useMemo(() => {
+    try {
+      return { model: state.data ? snapshotProjection(state.data, filters) : null, error: "" };
+    } catch (error) {
+      return { model: null, error: error instanceof Error ? error.message : "No se pudo calcular la caja." };
+    }
+  }, [state.data, filters]);
   const { currency: displayCurrency, money } = useCurrency();
   const formatAmount = (amount: number, compact = false) =>
     filters.currency === "BASE"
@@ -37,11 +40,12 @@ export function useProjectionView(refresh = 0) {
     filters.currency === "BASE"
       ? "Suma literal de REAL de todas las monedas, sin conversión. No representa un saldo en CLP."
       : filters.currency === "CLP"
-        ? `Partidas CLP de BASE · visualización en ${displayCurrency}${displayCurrency === "CLP" ? "" : " con la tasa vigente al corte"}.`
-        : `Solo partidas ${filters.currency} de BASE · importes originales, sin conversión.`;
+        ? `Partidas CLP de la carga seleccionada · visualización en ${displayCurrency}${displayCurrency === "CLP" ? "" : " con la tasa vigente al corte"}.`
+        : `Solo partidas ${filters.currency} de la carga seleccionada · importes originales, sin conversión.`;
   return {
     ...state,
-    model,
+    model: calculation.model,
+    error: state.error || calculation.error,
     filters,
     setFilters,
     reset,

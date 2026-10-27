@@ -16,6 +16,8 @@ export interface DailyBatch {
   status: string;
 }
 export interface BaseBundle {
+  businessIssues?: string[];
+  engineVersion?: string;
   rows: TreasuryRow[];
   links: ForecastLink[];
   cutoff: string;
@@ -51,6 +53,8 @@ export const baseTreasuryService = {
         throw new Error("No se recibió la información diaria de BASE.");
       const rows = snapshotRows(snapshot as RawSnapshot);
       return {
+        businessIssues: [...(snapshot.businessIssues ?? []), ...(snapshot.batch?.status === "partial" ? ["La carga seleccionada está incompleta."] : [])],
+        engineVersion: snapshot.engineVersion,
         rows,
         links: snapshot.links ?? [],
         batch: snapshot.batch ?? null,

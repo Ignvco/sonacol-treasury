@@ -23,11 +23,13 @@ export function StatementImport({
   currency,
   onClose,
   onSaved,
+  beforeSave,
 }: {
   account: string;
   currency: string;
   onClose: () => void;
   onSaved: () => void;
+  beforeSave?: () => Promise<void>;
 }) {
   const [text, setText] = useState(""),
     [name, setName] = useState(""),
@@ -78,6 +80,7 @@ export function StatementImport({
           closing,
         }),
       );
+      await beforeSave?.(); // Recheck account identity before the existing legacy-key RPC.
       await treasuryRpc("treasury_import_statement", {
         p_name: name,
         p_hash: bytesToHex(sha256(bytes)),

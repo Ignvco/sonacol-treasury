@@ -61,7 +61,6 @@ export default function Security() {
     <div className="grid gap-5">
       <PageHeader
         title="Seguridad y control"
-        subtitle="Acceso explícito, acciones verificadas y responsabilidades claras."
       />
       <div className="grid gap-4 sm:grid-cols-3">
         {[

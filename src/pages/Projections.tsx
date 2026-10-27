@@ -1,6 +1,6 @@
 import { ManualCalendar } from "./projections/ManualCalendar";
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCheck, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAsyncData } from "@/hooks/use-async";
 import { useCanWrite } from "@/contexts/auth-context";
@@ -26,11 +26,14 @@ import {
   PROJECTION_STATUS_LABEL,
 } from "@/financial-engine/types";
 import { amountInClp } from "@/financial-engine/currency";
-import { total } from "@/financial-engine/base-treasury";
+import { total, pendingProjectionAmount } from "@/financial-engine/base-treasury";
 import { ManualDialog } from "./projections/ManualDialog";
+import { ManualExecutionDialog } from "./projections/ManualExecutionDialog";
+import { PlanReview } from "./planning/PlanReview";
 
 /** Statuses that stay out of the horizon figures. */
 const INACTIVE = ["cancelado", "borrador"];
+const pending = (p: Projection) => pendingProjectionAmount(p.amount, p.executedAmount ?? 0);
 
 export default function Projections() {
   const { data, loading, error } = useAsyncData(async () => {
@@ -40,6 +43,7 @@ export default function Projections() {
   const [view, setView] = useState("table"),
     [duplicate, setDuplicate] = useState(false),
     [suggestedDate, setSuggestedDate] = useState<string>();
+  const [executing, setExecuting] = useState<Projection | null>(null);
   const canWrite = useCanWrite(),
     { rates } = useCurrency();
   const [editing, setEditing] = useState<Projection | null | undefined>(
@@ -51,33 +55,34 @@ export default function Projections() {
   useEffect(() => {
     setEditing(undefined);
     setDeleting(null);
+    setExecuting(null);
   }, [data?.bundle.batch?.id]);
   const activeCount = useMemo(
     () =>
-      (data?.items ?? []).filter((p) => !INACTIVE.includes(p.status)).length,
+      (data?.items ?? []).filter((p) => !INACTIVE.includes(p.status) && pending(p) > 0).length,
     [data],
   );
   const summary = useMemo(() => {
     try {
       const active = (data?.items ?? []).filter(
-        (p) => !INACTIVE.includes(p.status),
+        (p) => !INACTIVE.includes(p.status) && pending(p) > 0,
       );
       const income = total(
         active
           .filter((p) => p.type === "income")
-          .map((p) => amountInClp(p.amount, p.currency, rates)),
+          .map((p) => amountInClp(pending(p), p.currency, rates)),
       );
       const expense = total(
         active
           .filter((p) => p.type === "expense")
-          .map((p) => amountInClp(p.amount, p.currency, rates)),
+          .map((p) => amountInClp(pending(p), p.currency, rates)),
       );
       let running = 0;
       const curve: { date: string; net: number }[] = [];
       for (const p of [...active].sort((a, b) => a.date.localeCompare(b.date))) {
         running +=
           (p.type === "expense" ? -1 : 1) *
-          amountInClp(p.amount, p.currency, rates);
+          amountInClp(pending(p), p.currency, rates);
         const last = curve[curve.length - 1];
         if (last && last.date === p.date) last.net = running;
         else curve.push({ date: p.date, net: running });
@@ -118,7 +123,6 @@ export default function Projections() {
     <div className="flex flex-col gap-5 t-fade-in">
       <PageHeader
         title="Proyecciones"
-        subtitle="Planifica ingresos y egresos. Tus cambios se conservan al cargar la siguiente BASE."
         actions={
           canWrite && bundle.batch ? (
             <button
@@ -135,6 +139,7 @@ export default function Projections() {
           ) : undefined
         }
       />
+      {bundle.batch && bundle.rows.some(r => r.normalized?.sourceProfile === "ERP-RAW-v1" && r.normalized?.company === "SONACOL") && <PlanReview key={bundle.batch.id} batch={bundle.batch.id} canWrite={canWrite} />}
       <ProjectionsBento
         cutoff={bundle.cutoff}
         view={view}
@@ -146,12 +151,12 @@ export default function Projections() {
       />
       {!bundle.batch && (
         <p className="rounded-xl border p-4 text-sm">
-          Carga tu primera BASE en Importaciones para comenzar.
+          Importa tu primera ERP para comenzar a planificar.
         </p>
       )}
       <SectionCard
         title="Movimientos"
-        subtitle="Los importes de la tabla y del editor están expresados en su moneda original."
+        subtitle="Importes en moneda original. El flujo futuro utiliza únicamente el pendiente; la ejecución ya está incluida en la caja bancaria."
       >
         {view === "calendar" ? (
           <ManualCalendar
@@ -212,10 +217,16 @@ export default function Projections() {
                   `${p.type === "expense" ? "−" : ""}${baseNumber(p.amount)} ${p.currency}`,
               },
               {
+                key: "pending",
+                header: "Pendiente",
+                align: "right",
+                render: (p) => `${baseNumber(pending(p))} ${p.currency}`,
+              },
+              {
                 key: "status",
                 header: "Estado",
                 render: (p) => (
-                  <StatusBadge label={PROJECTION_STATUS_LABEL[p.status]} />
+                  <StatusBadge label={INACTIVE.includes(p.status) ? PROJECTION_STATUS_LABEL[p.status] : !pending(p) && (p.executedAmount ?? 0) > 0 ? "Ejecutado" : (p.executedAmount ?? 0) > 0 ? "Ejecución parcial" : PROJECTION_STATUS_LABEL[p.status]} />
                 ),
               },
             ]}
@@ -223,6 +234,7 @@ export default function Projections() {
               canWrite
                 ? (p) => (
                     <div className="flex gap-1">
+                      {bundle.rows.some(r => r.normalized?.recordRole === "bank_movement") && <button className="t-button-secondary !p-2" aria-label={"Registrar ejecución de " + p.description} onClick={() => setExecuting(p)}><CheckCheck size={16} /></button>}
                       <button
                         className="t-button-secondary !p-2"
                         aria-label={"Editar " + p.description}
@@ -273,6 +285,7 @@ export default function Projections() {
           onClose={() => setEditing(undefined)}
         />
       )}
+      {executing && <ManualExecutionDialog initial={executing} onClose={() => setExecuting(null)} />}
       <Dialog
         open={!!deleting}
         onOpenChange={(o) => {

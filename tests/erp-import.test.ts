@@ -2,8 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseWorkbook, processWorkbook } from "../src/import-engine/pipeline";
 import { importCutoffIssue } from "../src/import-engine/cutoff";
-import { erpContext, erpWorkbook, erpWithoutInvestmentOpening, workbookBytes } from "./helpers/erp-workbook";
+import { erpContext, erpWorkbook, erpWithoutInvestmentOpening, renamedErpWorkbook, workbookBytes } from "./helpers/erp-workbook";
 const parse = async (wb = erpWorkbook()) => processWorkbook(await parseWorkbook(workbookBytes(wb)), undefined, erpContext);
+
+for (const bookType of ["xlsx", "xlsm", "xls"] as const) test(`ERP recognizes renamed reports by headers in ${bookType}, preserving identities and investment coverage`, async () => {
+  const original = erpWithoutInvestmentOpening("31/08/2026");
+  const context = { ERP: { ...erpContext.ERP, investmentPeriodStart: "2026-08-31" } };
+  const before = processWorkbook(await parseWorkbook(workbookBytes(original, bookType)), undefined, context);
+  const p = processWorkbook(await parseWorkbook(workbookBytes(renamedErpWorkbook(original), bookType)), undefined, context);
+  assert.equal(p.error, 0); assert.equal(importCutoffIssue(p), null);
+  assert.deepEqual(p.records.map(r => r.normalized.sourceId), before.records.map(r => r.normalized.sourceId));
+  assert.deepEqual(p.sheets.map(s => s.name), ["BANCO", "Cuentas por cobrar", "Mayor inversiones"]);
+  assert.equal(p.records.find(r => r.entityType === "investment")!.normalized.periodStart, "2026-08-31");
+  assert.equal(p.records[0].normalized.periodStart, "2026-09-01");
+  assert.ok(p.records.every(r => r.normalized.sourceSheet === r.sheet));
+});
+
+test("incomplete or ambiguous ERP reports explain missing headers and never request a worked BASE", async () => {
+  const missing = renamedErpWorkbook(); delete missing.Sheets.BANCO; missing.SheetNames.shift();
+  await assert.rejects(parse(missing), e => e instanceof Error && /BANCOS.*encabezados/.test(e.message) && /Cuentas por cobrar/.test(e.message) && !/No se encontró la hoja BASE/.test(e.message));
+  const duplicate = erpWorkbook(); duplicate.Sheets.Copia = structuredClone(duplicate.Sheets.BANCOS); duplicate.SheetNames.push("Copia");
+  await assert.rejects(parse(duplicate), /más de un reporte BANCOS/);
+});
 
 test("ERP reads raw reports without BASE or MANUAL; repeated postings retain their value", async () => {
   const p = await parse(); assert.equal(p.error, 0); assert.equal(p.duplicate, 0); assert.equal(p.total, 8);

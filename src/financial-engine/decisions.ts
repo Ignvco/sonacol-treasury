@@ -8,6 +8,7 @@ import {
   type TreasuryRow,
 } from "./base-treasury";
 export interface DecisionContext {
+  engineVersion?: string;
   cutoff: string;
   currency: string;
   horizon: number;
@@ -67,6 +68,8 @@ export function scenarioRows(
       throw new Error("Supuesto duplicado o movimiento futuro inexistente.");
     if (a.amount !== undefined && (!Number.isFinite(a.amount) || a.amount <= 0))
       throw new Error("El importe debe ser positivo.");
+    if (a.amount !== undefined && total([a.amount, -Number(target.normalized?.executedAmount ?? 0)]) < 0)
+      throw new Error("El supuesto no puede reducir el compromiso por debajo de su ejecución registrada.");
     if (a.date !== undefined && !isTreasuryDate(a.date))
       throw new Error("Fecha de supuesto inválida.");
     map.set(a.key, a);
@@ -102,8 +105,16 @@ export function decisionModel(
     context.horizon,
     context.currency,
     context.bank,
+    context.engineVersion,
   );
-  const path = [{ date: context.cutoff, balance: m.available }, ...m.days];
+  // A day can contain the real cutoff position and its planned closing.
+  // Keep the lower point for risk, but never count that calendar day twice.
+  const byDate = new Map<string, { date: string; balance: number }>();
+  for (const point of [{ date: context.cutoff, balance: m.available }, ...m.days]) {
+    const previous = byDate.get(point.date);
+    if (!previous || point.balance < previous.balance) byDate.set(point.date, point);
+  }
+  const path = [...byDate.values()];
   return {
     ...m,
     firstRisk: path.find((d) => d.balance < context.minimum)?.date ?? null,

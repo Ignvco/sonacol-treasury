@@ -39,7 +39,6 @@ export default function Integrations() {
     <div className="t-fade-in flex flex-col gap-5">
       <PageHeader
         title="Centro de Integraciones"
-        subtitle="Comprueba el origen y los datos guardados en tu plataforma"
         actions={
           <Link className="t-button-primary" to="/importations">
             <FileSpreadsheet size={16} /> Nueva importación
@@ -58,12 +57,12 @@ export default function Integrations() {
           <div>
             <h2 className="font-semibold">Excel histórico</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Archivos .xlsx, .xlsm y .xls · Solo hoja BASE
+              Archivos .xlsx, .xlsm y .xls · ERP y CAJA histórico
             </p>
           </div>
           <div className="rounded-xl bg-brand-soft p-4">
             <p className="text-xs text-muted-foreground">
-              Filas BASE guardadas en la última fecha disponible
+              Registros guardados en la última importación
             </p>
             <p className="mt-1 text-3xl font-semibold tabular-nums">
               {data.records.toLocaleString("es-CL")}

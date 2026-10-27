@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
   ArrowLeftRight,
+  BookOpen,
   CalendarRange,
   FileText,
   FlaskConical,
@@ -66,6 +67,7 @@ const GROUPS = [
       { to: "/importations", label: "Importaciones", icon: Upload },
       { to: "/integrations", label: "Integraciones", icon: Plug },
       { to: "/security", label: "Seguridad", icon: ShieldCheck },
+      { to: "/help", label: "Guía de usuario", icon: BookOpen },
     ],
   },
 ];
@@ -87,7 +89,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
                   cn(
                     "flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors",
                     isActive
-                      ? "bg-brand text-primary-foreground shadow-[0_8px_20px_-8px_hsl(var(--brand)/0.65)]"
+                      ? "bg-brand-soft text-brand-dark"
                       : "text-foreground/75 hover:bg-brand-soft hover:text-brand-dark",
                   )
                 }
@@ -104,7 +106,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 export function Sidebar() {
   return (
-    <aside className="hidden h-full w-[212px] shrink-0 flex-col border-r border-border bg-gradient-to-b from-card via-card to-sunken lg:flex">
+    <aside className="hidden h-full w-[224px] shrink-0 flex-col border-r border-border bg-card lg:flex">
       <NavLink
         to="/dashboard"
         className="flex h-[84px] shrink-0 items-center border-b border-border px-6"

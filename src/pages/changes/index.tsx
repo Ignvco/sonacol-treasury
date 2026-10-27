@@ -18,6 +18,7 @@ import {
   baseNumber,
 } from "@/components/treasury/SourceBreakdown";
 import type { TreasuryRow } from "@/financial-engine/base-treasury";
+import { MigrationComparison } from "./MigrationComparison";
 export default function Changes() {
   const batches = useAsyncData(() => baseTreasuryService.batches());
   const [before, setBefore] = useState(""),
@@ -205,6 +206,7 @@ export default function Changes() {
           onClose={() => setSelected(null)}
         />
       )}
+      {state.data?.[1].coverage?.profile === "ERP-RAW-v1" && <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-medium">Control histórico de la migración (opcional)</summary><div className="mt-4"><MigrationComparison snapshot={state.data[1]} /></div></details>}
     </div>
   );
 }

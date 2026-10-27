@@ -22,7 +22,11 @@ export type CashFlowCategory =
   | "tax"
   | "dividends"
   | "credit"
-  | "social_levies";
+  | "social_levies"
+  | "investment_placement"
+  | "bank_charges"
+  | "direct_debit"
+  | "unclassified";
 
 export const INCOME_CATEGORIES: CashFlowCategory[] = [
   "collection",
@@ -38,6 +42,9 @@ export const EXPENSE_CATEGORIES: CashFlowCategory[] = [
   "dividends",
   "credit",
   "social_levies",
+  "investment_placement",
+  "bank_charges",
+  "direct_debit",
 ];
 
 export type CashFlowStatus =
@@ -117,7 +124,15 @@ export interface CashFlow {
   importRecordId?: string;
 }
 
+export interface InvestmentMaturity {
+  sourceKey: string; sourceRow: number; sourceSheet: string;
+  operationDate: string | null; endDate: string | null; signedAmount: number;
+  currency: string; ledger: string; counterpartLedger: string; description: string;
+  role: string; transaction: string | null;
+}
 export interface Investment {
+  maturityEntries?: InvestmentMaturity[];
+  maturityCutoff?: string;
   id: string;
   bankId: string;
   type: InvestmentType;
@@ -143,6 +158,8 @@ export interface Payment {
 
 export interface Projection {
   id: string;
+  bankLedger?: string;
+  executedAmount?: number;
   batchId?: string;
   revision?: number;
   edited?: boolean;
@@ -215,6 +232,7 @@ export type ImportEntityType =
   | "unknown";
 
 export interface ImportBatch {
+  incremental?: import("@/import-engine/types").ErpIncrementalResult;
   importedRecords?: number | null;
   id: string;
   fileName: string;
@@ -285,6 +303,10 @@ export const CASHFLOW_CATEGORY_LABEL: Record<CashFlowCategory, string> = {
   dividends: "Dividendos",
   credit: "Créditos",
   social_levies: "Leyes sociales",
+  investment_placement: "Colocaciones",
+  bank_charges: "Cargos bancarios",
+  direct_debit: "Pagos PAC",
+  unclassified: "Sin clasificar",
 };
 
 export const CASHFLOW_TYPE_LABEL: Record<CashFlowType, string> = {

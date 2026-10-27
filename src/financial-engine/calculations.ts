@@ -19,6 +19,7 @@ import type {
   Payment,
   Reconciliation,
 } from "./types";
+import { total } from "./base-treasury";
 
 export interface DailyProjection {
   date: string;
@@ -147,10 +148,10 @@ export function aggregateProjection(
       final: 0,
       variation: 0,
     };
-    b.income += r.income;
-    b.expense += r.expense;
+    b.income = total([b.income, r.income]);
+    b.expense = total([b.expense, r.expense]);
     b.final = r.final;
-    b.variation = r.final - b.initial;
+    b.variation = total([r.final, -b.initial]);
     buckets.set(key, b);
   }
   return Array.from(buckets.values());

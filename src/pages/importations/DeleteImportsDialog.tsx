@@ -58,7 +58,7 @@ export function DeleteImportsDialog({
     };
   }, [target?.id, retry]);
   const remove = async () => {
-    if (!plan || saving || confirmation !== phrase) return;
+    if (!plan || plan.blocked || saving || confirmation !== phrase) return;
     setSaving(true);
     setError("");
     try {
@@ -157,7 +157,15 @@ export function DeleteImportsDialog({
                 </p>
               ) : (
                 <>
-                  {plan.dependentWork && (
+                  {plan.blocked && (
+                    <div role="alert" className="space-y-2 rounded-xl border border-warning/25 bg-warning-soft p-3 text-sm">
+                      <p className="font-medium">{plan.blockingReason}</p>
+                      <p>{Object.entries(plan.protectedWork ?? {}).filter(([, n]) => n > 0).map(([key, n]) =>
+                        `${({ manual: "compromisos manuales", manualDetails: "detalles manuales", businessDecisions: "decisiones de negocio", links: "vínculos", scenarios: "escenarios", forecasts: "previsiones", tasks: "tareas", comments: "comentarios", attachments: "adjuntos", matches: "conciliaciones" } as Record<string, string>)[key] ?? key}: ${n}`
+                      ).join(" · ")}</p>
+                    </div>
+                  )}
+                  {!plan.blocked && plan.dependentWork && Object.values(plan.dependentWork).some(n => n > 0) && (
                     <p className="rounded-xl border border-warning/25 bg-warning-soft p-3 text-sm text-warning">
                       Trabajo vinculado que también se eliminará:{" "}
                       {Object.entries(plan.dependentWork)
@@ -170,15 +178,13 @@ export function DeleteImportsDialog({
                     </p>
                   )}
                   <p className="text-sm leading-relaxed">
-                    Se borrarán definitivamente las filas importadas y el
-                    trabajo MANUAL de las fechas eliminadas, incluidas{" "}
-                    {plan.editedManual} proyecciones editadas en la plataforma.
-                    El archivo original de tu computador permanece intacto.
+                    Solo se permite eliminar versiones sin trabajo exclusivo ni históricos vinculados.
+                    Las filas originales pueden recuperarse reimportando el archivo; las ediciones requieren una copia equivalente conservada.
                   </p>
                   <p className="text-sm leading-relaxed">
                     {plan.latestAfter
                       ? `La última BASE restante será ${plan.latestAfter.cutoff} · ${plan.latestAfter.fileName}. Los datos de otros archivos se conservan.`
-                      : "No quedará ninguna BASE: caja y proyecciones mostrarán cero, y las tablas quedarán vacías hasta la próxima importación."}
+                      : "No quedará una versión para consultar hasta la próxima importación. Esto no significa que el saldo bancario sea cero."}
                   </p>
                   {plan.carriedManual > 0 && (
                     <p className="text-sm">
@@ -189,11 +195,12 @@ export function DeleteImportsDialog({
                   )}
                   <p className="text-xs text-muted-foreground">
                     Se conservan usuarios, permisos, catálogos, tasas de cambio,
-                    entregas SAP y auditoría. Si necesitas recuperar los datos
-                    eliminados, deberás reimportar el Excel; eso no recupera las
-                    ediciones MANUAL borradas.
+                    entregas SAP y auditoría.
                   </p>
-                  <label className="grid gap-2 text-sm font-medium">
+                  {!!((plan.preservedBankRegister?.movements ?? 0) + (plan.preservedBankRegister?.openings ?? 0)) && <p className="rounded-lg border border-warning/30 p-3 text-sm">
+                    El registro incremental conserva {plan.preservedBankRegister!.movements} movimientos y {plan.preservedBankRegister!.openings} aperturas mensuales reconocidas. Al volver a importar ERP se reconocerán esos datos. Eliminar el archivo no corrige ni anula una operación bancaria.
+                  </p>}
+                  {!plan.blocked && <label className="grid gap-2 text-sm font-medium">
                     Escribe {phrase} para confirmar
                     <input
                       className="t-input"
@@ -202,7 +209,7 @@ export function DeleteImportsDialog({
                       disabled={saving}
                       onChange={(e) => setConfirmation(e.target.value)}
                     />
-                  </label>
+                  </label>}
                 </>
               )}
             </>
@@ -214,6 +221,7 @@ export function DeleteImportsDialog({
             className="t-button-primary bg-danger-vivid hover:bg-danger-vivid/90"
             disabled={
               (!plan?.files && !plan?.legacyOrphans) ||
+              !!plan?.blocked ||
               confirmation !== phrase ||
               saving ||
               loading

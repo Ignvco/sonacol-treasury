@@ -66,7 +66,7 @@ export function BentoHeroCard({
     >
       <span
         aria-hidden
-        className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-white/10 blur-3xl"
+        className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-transparent"
       />
       <BentoHeader
         tone="dark"

@@ -94,13 +94,13 @@ export function BentoFlowCard({
   netLabel?: string;
   netText: string;
   netPositive: boolean;
-  incomeShare: number;
+  incomeShare: number | null;
   rows: BentoFlowRow[];
   foot?: BentoFlowFoot;
   className?: string;
   style?: CSSProperties;
 }) {
-  const share = Math.min(Math.max(incomeShare, 0), 1);
+  const share = incomeShare === null ? null : Math.min(Math.max(incomeShare, 0), 1);
 
   return (
     <BentoCard
@@ -126,7 +126,7 @@ export function BentoFlowCard({
           }
         />
 
-        <div
+        {share === null ? <p className="mt-5 text-xs text-muted-foreground">Sin ingresos ni egresos previstos en este período.</p> : <><div
           className="mt-5 flex h-1.5 overflow-hidden rounded-full bg-muted"
           aria-hidden="true"
         >
@@ -136,7 +136,7 @@ export function BentoFlowCard({
         <div className="mt-2 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
           <span>Ingresos {Math.round(share * 100)}%</span>
           <span>Egresos {100 - Math.round(share * 100)}%</span>
-        </div>
+        </div></>}
       </div>
 
       <div className="flex flex-col gap-3">

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TreasuryRow, ForecastLink } from "./base-treasury";
+import { erpBankSigned, isErpBank } from "./bank-control";
 export interface RawRow {
   id: string;
   kind: TreasuryRow["kind"];
@@ -32,6 +33,8 @@ export interface BusinessDecision {
   id: string; batch_id: string; kind: "adjustment" | "redemption" | "rule";
   target_key: string; values_json: Record<string, string | number | null>;
   revision: number; deleted: boolean; updated_at: string;
+  execution_json?: { sourceKey: string; amount: number; date: string; recordId?: string }[];
+  plan_references?: string[];
   source_json?: {
     recordId: string; entityId: string; kind: RawRow["kind"]; sourceKey: string;
     row: number; fileName: string; cutoff: string; normalized: RawRow["normalized"];
@@ -41,14 +44,15 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
   return [...data.rows, ...data.manual].map((r) => {
     const n = r.normalized,
       date = n.date ?? n.issueDate ?? n.startDate ?? "";
+    const bankSigned = isErpBank(n) ? erpBankSigned(n) : null;
     return {
       id: r.id,
       kind: r.kind,
       inLatest: true,
       origin: n.sourceOrigin,
-      amount: Number(n.amount),
+      amount: bankSigned === null ? Number(n.amount) : Math.abs(bankSigned),
       currency: n.currency,
-      type: n.type ?? "income",
+      type: bankSigned === null ? n.type ?? "income" : bankSigned < 0 ? "expense" : "income",
       status:
         n.status ??
         (r.kind === "invoice"
@@ -64,6 +68,7 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
           ? (n.bank ?? "Sin banco")
           : (n.settlementBank ?? n.bank ?? "Sin banco"),
       ledger: n.ledgerCode ?? "",
+      settlementLedger: n.settlementLedger ?? (r.kind === "projection" ? n.ledgerCode ?? "" : ""),
       description: n.description ?? "",
       document: n.document ?? "",
       customer: n.customer ?? "",
@@ -74,7 +79,7 @@ export function snapshotRows(data: RawSnapshot): TreasuryRow[] {
       cutoff: data.batch?.cutoff ?? n.cutoffDate ?? "",
       fileName: n.removedSourceFile
         ? String(n.removedSourceFile) + " (origen eliminado)"
-        : r.fileName,
+        : String(n.sourceFileName ?? r.fileName),
       row: r.row ?? n.removedSourceRow ?? null,
       recordId: r.recordId,
       normalized: n,

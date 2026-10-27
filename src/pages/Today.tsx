@@ -44,7 +44,7 @@ export default function Today() {
   const { bundle, workspace, members } = data,
     { currency, horizon } = filters;
   const minimum = Number(workspace.settings.minimums[currency] ?? 0);
-  const context = { cutoff: bundle.cutoff, currency, horizon, minimum };
+  const context = { cutoff: bundle.cutoff, currency, horizon, minimum, engineVersion: bundle.engineVersion };
   const model = decisionModel(bundle.rows, bundle.links, context);
   const previous = workspace.previous,
     bridge = previous?.batch
@@ -83,7 +83,6 @@ export default function Today() {
     <div className="grid gap-5 t-fade-in">
       <PageHeader
         title="Hoy"
-        subtitle="Lo que exige acción hoy: caja disponible, umbral, cambios y agenda."
         actions={
           <>
             <Link className="t-button-secondary" to="/cashflow">
@@ -119,13 +118,12 @@ export default function Today() {
       </div>
       {!bundle.batch && (
         <div className="rounded-2xl border border-brand/20 bg-brand-soft p-6">
-          <h2 className="font-semibold">Tu tesorería comienza con BASE</h2>
+          <h2 className="font-semibold">Importa tu primera ERP</h2>
           <p className="my-2 text-sm">
-            Carga tu Excel para construir la posición de caja y los próximos
-            compromisos.
+            Revisa los saldos y configura tus compromisos en la plataforma.
           </p>
           <Link className="t-button-primary" to="/importations">
-            Importar BASE
+            Importar ERP
           </Link>
         </div>
       )}

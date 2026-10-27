@@ -34,10 +34,8 @@
       hsl(var(--brand-soft)) 0%,
       hsl(var(--brand-muted) / 0.5) 100%
     );
-    --shadow-bento: 0 1px 2px rgba(16, 24, 40, 0.04),
-      0 12px 30px -14px rgba(16, 24, 40, 0.18);
-    --shadow-bento-hover: 0 2px 4px rgba(16, 24, 40, 0.05),
-      0 20px 44px -18px rgba(16, 24, 40, 0.24);
+    --shadow-bento: 0 1px 3px rgba(16, 24, 40, 0.035);
+    --shadow-bento-hover: 0 2px 6px rgba(16, 24, 40, 0.06);
 
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 9%;
@@ -155,17 +153,16 @@
 @layer components {
   /* Premium card shell used across all treasury modules */
   .t-card {
-    @apply rounded-[24px] border border-border bg-card;
+    @apply min-w-0 rounded-2xl border border-border bg-card;
     box-shadow: var(--shadow-bento);
-    transition: box-shadow 0.25s ease, transform 0.25s ease;
+    transition: box-shadow 0.15s ease;
   }
   .t-card-hover:hover {
     box-shadow: var(--shadow-bento-hover);
-    transform: translateY(-1px);
   }
 
   .t-label {
-    @apply text-[11px] font-medium uppercase tracking-wide text-muted-foreground;
+    @apply text-xs font-medium leading-relaxed text-muted-foreground;
   }
 
   .t-kpi-value {
@@ -182,19 +179,16 @@
 
   /* Soft fade + slide used on tab switches / page transitions */
   .t-fade-in {
-    animation: t-fade-in 0.35s ease both;
+    animation: none;
   }
 
   .t-input {
-    @apply h-9 rounded-xl border border-input bg-card px-3 text-[13px] text-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground/80 focus:border-ring focus:ring-2 focus:ring-ring/20;
+    @apply h-10 min-w-0 max-w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20;
   }
 
-  /* Subtle dot texture for the app canvas (bento-box cue). */
+  /* Quiet canvas keeps the financial information in the foreground. */
   .t-canvas {
     background-color: hsl(var(--background));
-    background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
-    background-size: 22px 22px;
-    background-position: -1px -1px;
   }
 }
 
@@ -225,7 +219,10 @@ body,
   .t-button-primary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-50; }
   .t-button-secondary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50; }
 }
-@media (max-width: 640px) { .t-input { min-height: 42px; } }
+@media (max-width: 640px) {
+  .t-input { min-height: 44px; font-size: 16px; }
+  .t-button-primary, .t-button-secondary { min-height: 44px; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 @media print {
   aside, [data-shell-header], nav, button, [role="dialog"] { display: none !important; }

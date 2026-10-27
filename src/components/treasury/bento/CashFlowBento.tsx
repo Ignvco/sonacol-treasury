@@ -24,6 +24,7 @@ export function CashFlowBento({
   cutoff,
   to,
   horizon,
+  includesCutoff = false,
   mode,
   onModeChange,
   available,
@@ -38,6 +39,7 @@ export function CashFlowBento({
   cutoff: string;
   to: string;
   horizon: number;
+  includesCutoff?: boolean;
   mode: ChartMode;
   onModeChange: (mode: ChartMode) => void;
   available: number;
@@ -52,7 +54,7 @@ export function CashFlowBento({
   const delta =
     available !== 0 ? ((projected - available) / Math.abs(available)) * 100 : null;
   const incomeShare =
-    collections + payments > 0 ? collections / (collections + payments) : 0.5;
+    collections + payments > 0 ? collections / (collections + payments) : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3 lg:gap-5">
@@ -60,7 +62,7 @@ export function CashFlowBento({
         className="lg:col-span-2"
         icon={Activity}
         title="Proyección de liquidez"
-        subtitle={`Serie ${MODE_LABEL[mode].toLowerCase()} · próximos ${horizon} días`}
+        subtitle={`Serie ${MODE_LABEL[mode].toLowerCase()} · ${includesCutoff ? "corte y " : ""}próximos ${horizon} días`}
         trailing={
           <PeriodToggle<ChartMode>
             value={mode}
@@ -104,8 +106,8 @@ export function CashFlowBento({
         style={{ animationDelay: "80ms" }}
         icon={ArrowLeftRight}
         title="Entradas y salidas"
-        subtitle={`Previstas en los próximos ${horizon} días`}
-        netText={formatAmount(Math.abs(variation))}
+        subtitle={`Previstas ${includesCutoff ? "al corte y " : ""}en los próximos ${horizon} días`}
+        netText={formatAmount(variation)}
         netPositive={variation >= 0}
         incomeShare={incomeShare}
         rows={[
@@ -113,14 +115,14 @@ export function CashFlowBento({
             key: "collections",
             tone: "success",
             icon: ArrowDownLeft,
-            label: "Ingresos",
+            label: "Ingresos previstos",
             amount: formatAmount(collections),
           },
           {
             key: "payments",
             tone: "danger",
             icon: ArrowUpRight,
-            label: "Egresos",
+            label: "Egresos previstos",
             amount: formatAmount(payments),
           },
         ]}

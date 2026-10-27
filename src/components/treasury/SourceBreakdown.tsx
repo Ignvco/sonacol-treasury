@@ -18,10 +18,12 @@ export function SourceBreakdown({title,rows,onClose}:{title:string;rows:(Treasur
  return <Dialog open onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
   <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Selecciona una fila para consultar sus valores de origen.</DialogDescription></DialogHeader>
   <DataTable data={rows} rowKey={r=>r.kind+":"+r.id} pageSize={8} search searchText={r=>r.description+" "+r.document+" "+r.bank+" "+r.row} onRowClick={r=>void open(r)} columns={[
-   {key:"date",header:"Fecha",render:r=>"effectiveDate" in r?r.effectiveDate:r.date,sortValue:r=>r.date},
+   {key:"date",header:"Fecha del cálculo",render:r=>"effectiveDate" in r?r.effectiveDate:r.date,sortValue:r=>"effectiveDate" in r?r.effectiveDate:r.date},
+   {key:"plannedDate",header:"Fecha prevista",render:r=>"effectiveDate" in r?r.plannedDate:"—"},
    {key:"source",header:"Origen",render:r=>r.origin},
    {key:"detail",header:"Detalle",className:"!whitespace-normal min-w-[180px]",render:r=>r.description||r.customer||r.document},
    {key:"bank",header:"Banco",render:r=>r.bank},
+   {key:"account",header:"Cuenta bancaria",render:r=>r.kind==="cash_flow"?r.ledger:r.settlementLedger||"Sin cuenta asignada"},
    {key:"row",header:"Fila de origen",render:r=>r.row??(r.normalized?.isPosition ? "Mayor ERP" : "Manual")},
    {key:"amount",header:"Aporte al cálculo",align:"right",render:r=>baseNumber(amount(r)),sortValue:amount},
    {key:"currency",header:"Moneda",render:r=>r.currency}

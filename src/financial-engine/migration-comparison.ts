@@ -21,8 +21,12 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
     if (!rows.some(r => r.kind === "cash_flow" && r.origin === "BANCO" && r.currency === currency)) blocks.push(`${name} no incluye saldos bancarios en ${currency}; su ausencia no equivale a saldo cero.`);
   }
   if (blocks.length) return { blocks, warnings, days: [], changes: [], openingDelta: null, maxDifference: null, numericallyEqual: false };
-  const left = baseTreasury(leftRows, reference.links, reference.batch!.cutoff, horizon, currency);
-  const right = baseTreasury(rightRows, current.links, current.batch!.cutoff, horizon, currency);
+  // Recalculate the comparison under one explicit policy without modifying
+  // either stored snapshot. This is not an independent Excel reconciliation.
+  const left = baseTreasury(leftRows, reference.links, reference.batch!.cutoff, horizon, currency, "", current.engineVersion);
+  const right = baseTreasury(rightRows, current.links, current.batch!.cutoff, horizon, currency, "", current.engineVersion);
+  if (left.cutoffPosition && reference.engineVersion !== current.engineVersion)
+    warnings.push("La referencia CAJA se recalcula aquí con el criterio de fechas del ERP actual. Sus datos guardados no cambian; esta comparación no acredita por sí sola equivalencia con las fórmulas de Excel.");
   const leftAccounts = new Set(left.positions.map(p => p.ledger)), rightAccounts = new Set(right.positions.map(p => p.ledger));
   const absent = [...new Set([...leftAccounts, ...rightAccounts])].filter(k => !leftAccounts.has(k) || !rightAccounts.has(k));
   if (absent.length) warnings.push(`Cobertura de cuentas diferente: ${absent.join(", ")}. No acredita equivalencia.`);
@@ -42,6 +46,8 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
       before.effectiveDate !== after.effectiveDate ? "Fecha prevista" : "",
       total([before.signed, -after.signed]) !== 0 ? "Importe" : "",
       before.bank !== after.bank ? "Banco receptor" : "",
+      (before.settlementLedger || before.ledger) !== (after.settlementLedger || after.ledger) ? "Cuenta receptora" : "",
+      before.type !== after.type ? "Ingreso/egreso" : "",
     ].filter(Boolean);
     if (differences.length) changes.push({ id: key, label: before.customer || before.description, reason: differences.join(" · "), before, after });
   }
@@ -54,5 +60,5 @@ export function compareMigration(reference: RawSnapshot, current: RawSnapshot, c
   }));
   const openingDelta = total([right.available, -left.available]);
   const maxDifference = Math.max(Math.abs(openingDelta), ...days.map(d => Math.abs(d.delta)));
-  return { blocks, warnings, days, changes, openingDelta, maxDifference, numericallyEqual: maxDifference === 0 && warnings.length === 0 };
+  return { blocks, warnings, days, changes, openingDelta, maxDifference, numericallyEqual: maxDifference === 0 && warnings.length === 0 && changes.length === 0 };
 }

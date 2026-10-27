@@ -18,6 +18,7 @@ import { useAuth, roleLabel } from "@/contexts/auth-context";
 import { cn } from "@/lib/utils";
 
 const TITLES: Record<string, string> = {
+  "/help": "Guía de usuario",
   "/today": "Hoy",
   "/changes": "Explicar cambios",
   "/scenarios": "Laboratorio de caja",
@@ -62,7 +63,7 @@ export function TopHeader() {
   return (
     <header
       data-shell-header
-      className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur-md sm:px-6 xl:px-8"
+      className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 sm:px-6 xl:px-8"
     >
       <div className="flex min-w-0 items-center gap-3">
         <MobileNavigation />
@@ -74,7 +75,7 @@ export function TopHeader() {
         </p>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 sm:gap-2.5">
         <WorkingDateChip />
         <GlobalSearch />
         <CurrencySelector className="inline-flex" />

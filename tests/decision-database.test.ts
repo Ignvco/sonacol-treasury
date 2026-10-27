@@ -264,14 +264,15 @@ test("deletion: dependent work is previewed and stale approval cannot remove a n
     /cambiaron/,
   );
   const updated = await query(db, "select excel_deletion_plan($1) s", [batch]);
-  await query(db, "select delete_excel_imports($1,$2,$3) s", [
+  assert.equal(updated.blocked, true);
+  await assert.rejects(query(db, "select delete_excel_imports($1,$2,$3) s", [
     batch,
     updated.revision,
     "ELIMINAR",
-  ]);
+  ]), /sin respaldo/);
   assert.equal(
     (await db.query("select * from treasury_scenarios")).rows.length,
-    0,
+    1,
   );
   assert.equal(
     (await db.query("select * from treasury_statements")).rows.length,

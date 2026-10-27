@@ -5,7 +5,8 @@ import type { BaseReadingSummary, ImportSummary, SheetOverride } from "./types";
 export function resolveBaseCutoff(reading: BaseReadingSummary, choice?: SheetOverride) {
   if (reading.profileId === "ERP-RAW-v1") {
     const cutoff = choice?.cutoffDate ?? null;
-    const periodStart = reading.sheetName?.trim().toUpperCase() === "COLOCACIONES" ? choice?.investmentPeriodStart ?? null : choice?.periodStart ?? null;
+    const report = reading.erpReport ?? reading.sheetName?.trim().toUpperCase();
+    const periodStart = report === "COLOCACIONES" ? choice?.investmentPeriodStart ?? null : choice?.periodStart ?? null;
     const company = choice?.company?.trim() || "SONACOL", localCurrency = choice?.localCurrency ?? "CLP";
     const cutoffIssue = !cutoff || !validDate(cutoff) ? "Define la fecha de corte de los datos ERP."
       : !periodStart || !validDate(periodStart) || periodStart > cutoff ? `Define el inicio del período de ${reading.sheetName ?? "ERP"}.`

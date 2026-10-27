@@ -41,7 +41,7 @@ export default function Accuracy() {
       ? decisionModel(
           snapshotRows(forecast.snapshot),
           forecast.snapshot.links,
-          forecast.context,
+          { ...forecast.context, engineVersion: forecast.snapshot.engineVersion },
         )
       : null;
   const accuracy =

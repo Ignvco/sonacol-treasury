@@ -46,7 +46,6 @@ export default function Receivables() {
     <div className="t-fade-in flex flex-col gap-5">
       <PageHeader
         title="Cobranzas"
-        subtitle="Cartera de clientes — estado y antigüedad de saldos"
         actions={<ExportMenu rows={exportRows} filename="cuentas-por-cobrar" />}
       />
 
@@ -60,7 +59,7 @@ export default function Receivables() {
         aging={aging}
       />
 
-      <SectionCard title="Detalle de Cartera" subtitle="Documentos abiertos por cliente" bodyClassName="pt-2">
+      <SectionCard title="Detalle de Cartera" bodyClassName="pt-2">
         <DataTable<Invoice>
           data={open}
           rowKey={(i) => i.id}
