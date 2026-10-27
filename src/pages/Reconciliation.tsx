@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAsyncData } from "@/hooks/use-async";
 import { dataService } from "@/services/dataService";
+import { bankAccountCatalogService } from "@/services/bankAccountCatalogService";
+import { reconcileBankIdentity, assertSameReconciliationIdentity } from "@/financial-engine/reconciliation-identity";
 import { treasuryRpc } from "@/services/decisionService";
 import { useCanWrite } from "@/contexts/auth-context";
 import {
@@ -59,11 +61,21 @@ export default function Reconciliation() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const canWrite = useCanWrite();
+  // Separate catalog lookup: failure must not hide historical reconciliations.
+  const catalog = useAsyncData(() => bankAccountCatalogService.load(), [version]);
   const account =
       state.data?.find((a) => a.id === accountId) ?? state.data?.[0],
     accountKey = account
       ? JSON.stringify([account.bankName, account.accountNumber || ""])
       : "";
+  const identity = account && catalog.data ? reconcileBankIdentity(account, catalog.data) : null;
+  const canStartNew = canWrite && !catalog.loading && !catalog.error && !!identity?.mayWrite;
+  const verifyBeforeNewWork = async () => {
+    if (!account || !identity || catalog.loading || catalog.error)
+      throw new Error("No se pudo verificar la identidad bancaria. Actualiza la pantalla antes de continuar.");
+    // Recheck the public mask AND revision immediately before submitting.
+    assertSameReconciliationIdentity(identity, account, await bankAccountCatalogService.load());
+  };
   const matches = useAsyncData(
     () =>
       account
@@ -143,7 +155,7 @@ export default function Reconciliation() {
         title="Conciliación"
         subtitle="Cruza BANCO de BASE con una cartola bancaria independiente."
         actions={
-          canWrite && account ? (
+          canStartNew && account ? (
             <button
               className="t-button-primary"
               onClick={() => setImporting(true)}
@@ -153,6 +165,11 @@ export default function Reconciliation() {
           ) : undefined
         }
       />
+      {catalog.loading && <p className="text-sm text-muted-foreground">Consultando identidad bancaria verificada…</p>}
+      {catalog.error && <p role="alert" className="rounded-xl border border-danger/30 p-3 text-sm text-danger">No se pudo comprobar el catálogo bancario: {catalog.error}. Las nuevas operaciones quedan suspendidas; el historial permanece disponible.</p>}
+      {identity && !catalog.loading && !catalog.error && <p role="status" className="rounded-xl border p-3 text-sm">
+        <strong>{identity.state === "verified" ? `Cuenta verificada ${identity.maskedNumber} · revisión ${identity.revision}` : "Conciliación por identidad contable heredada"}.</strong> {identity.issue}
+      </p>}
       <SectionCard
         title="Cuentas importadas de BASE"
         subtitle="Selecciona una cuenta para revisar su origen."
@@ -170,6 +187,14 @@ export default function Reconciliation() {
               key: "ledger",
               header: "Cuenta contable",
               render: (a) => a.accountNumber || "Sin código",
+            },
+            {
+              key: "bankIdentity",
+              header: "Número bancario verificado",
+              render: (a) => {
+                const value = catalog.data ? reconcileBankIdentity(a, catalog.data) : null;
+                return value?.state === "verified" ? value.maskedNumber : "No verificado";
+              },
             },
             {
               key: "amount",
@@ -242,7 +267,7 @@ export default function Reconciliation() {
                             ? s.candidates.length + " posibles movimientos"
                             : s.reason}
                         </span>
-                        {canWrite && !s.ambiguous && (
+                        {canStartNew && !s.ambiguous && (
                           <button
                             className="t-button-secondary"
                             onClick={() => {
@@ -277,7 +302,7 @@ export default function Reconciliation() {
                             <input
                               aria-label={"Seleccionar BASE " + r.description}
                               type="checkbox"
-                              disabled={!canWrite || remaining(r) <= 0}
+                              disabled={!canStartNew || remaining(r) <= 0}
                               checked={r.recordId! in ledger}
                               onChange={() => choose(r.recordId!, remaining(r))}
                             />
@@ -347,7 +372,7 @@ export default function Reconciliation() {
                               }
                               type="checkbox"
                               disabled={
-                                !canWrite ||
+                                !canStartNew ||
                                 Math.abs(r.amount) - Number(r.allocated) <= 0
                               }
                               checked={r.id in bank}
@@ -410,7 +435,7 @@ export default function Reconciliation() {
                     />
                   </SectionCard>
                 </div>
-                {canWrite && (
+                {canStartNew && (
                   <SectionCard title="Asignación preparada">
                     <p className="mb-3 text-sm">
                       BASE {baseNumber(ledgerSum)} · Cartola{" "}
@@ -429,6 +454,7 @@ export default function Reconciliation() {
                     <button
                       className="t-button-primary mt-3"
                       disabled={
+                        !canStartNew ||
                         ledgerSum <= 0 ||
                         Math.abs(ledgerSum - bankSum) > 0.005 ||
                         note.trim().length < 3 ||
@@ -508,6 +534,7 @@ export default function Reconciliation() {
       {importing && account && (
         <StatementImport
           account={accountKey}
+          beforeSave={verifyBeforeNewWork}
           currency={account.currency}
           onClose={() => setImporting(false)}
           onSaved={() => {
@@ -557,7 +584,7 @@ export default function Reconciliation() {
           )}
           <button
             className="t-button-primary"
-            disabled={busy || (!!voidId && reason.trim().length < 5)}
+            disabled={busy || (!!voidId && reason.trim().length < 5) || (!voidId && !canStartNew)}
             onClick={() =>
               void run(() =>
                 voidId
@@ -565,7 +592,7 @@ export default function Reconciliation() {
                       p_id: voidId,
                       p_reason: reason,
                     })
-                  : treasuryRpc("treasury_confirm_match", {
+                  : verifyBeforeNewWork().then(() => treasuryRpc("treasury_confirm_match", {
                       p_batch: account?.rows[0]?.batchId,
                       p_account: accountKey,
                       p_currency: account?.currency,
@@ -578,7 +605,7 @@ export default function Reconciliation() {
                         amount,
                       })),
                       p_note: note,
-                    }),
+                    })),
               )
             }
           >
