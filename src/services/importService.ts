@@ -19,6 +19,10 @@ export interface ImportProgress {
   total: number;
 }
 export interface ExcelDeletionPlan {
+  workProtectionVersion?: number;
+  blocked?: boolean;
+  blockingReason?: string | null;
+  protectedWork?: Record<string, number>;
   preservedBankRegister?: { movements: number; openings: number };
   revision: string;
   batchIds: string[];
@@ -50,7 +54,7 @@ export interface ExcelDeletionResult {
 
 function deletionError(error: { code?: string; message?: string }): string {
   if (["PGRST202", "42883"].includes(error.code ?? ""))
-    return "Falta habilitar la eliminación de Excel. Aplica la migración 20260918000000000_delete_excel_imports.sql y vuelve a intentar.";
+    return "No se pudo verificar la protección del trabajo de tesorería. Revisa la versión instalada y el historial de migraciones antes de eliminar.";
   if (error.code === "57014")
     return "No se recibió confirmación del borrado. Actualiza el historial antes de volver a intentarlo.";
   return (
@@ -270,6 +274,8 @@ export const importService = {
     const plan = data as unknown as ExcelDeletionPlan | null;
     if (!plan?.revision || !Array.isArray(plan.batchIds))
       throw new Error("No se pudo comprobar qué datos se eliminarán.");
+    if (plan.workProtectionVersion !== 1 || typeof plan.blocked !== "boolean")
+      throw new Error("Falta instalar la protección del trabajo de tesorería. Actualiza la base de datos antes de eliminar importaciones.");
     return plan;
   },
   async deleteExcel(

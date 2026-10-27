@@ -237,8 +237,8 @@ test("daily workflow uses real SQL: two different workbooks, editable MANUAL, hi
         name: /Editar|Programar rescate|Marcar como rescatada/,
       }),
     ).toHaveCount(0);
-    await page.goto("/payments");
-    await expect(page).toHaveURL(/\/projections$/);
+    await page.goto("/projections");
+    await expect(page.getByRole("heading", { name: "Proyecciones", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await db.close();

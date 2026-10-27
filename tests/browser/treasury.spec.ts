@@ -322,7 +322,7 @@ test("real browser worker reads BASE, previews and commits a batch", async ({
     page.getByRole("heading", { name: "Compara tu Excel antes de actualizar" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Carga diaria de BASE", { exact: false }).first(),
+    page.getByRole("checkbox", { name: /Revisé la comparación/ }),
   ).toBeVisible();
   await page.getByRole("checkbox").check();
   await expect(
@@ -481,21 +481,14 @@ test("all treasury routes render without runtime errors", async ({ page }) => {
   await setup(page);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  for (const route of [
-    "dashboard",
-    "cashflow",
-    "banks",
-    "receivables",
-    "payments",
-    "investments",
-    "projections",
-    "reconciliation",
-    "reports",
-    "settings",
-    "integrations",
-  ]) {
+  for (const [route, title] of Object.entries({
+    dashboard: "Resumen", cashflow: "Flujo de caja", banks: "Saldos bancarios",
+    receivables: "Cobranzas", investments: "Inversiones", projections: "Proyecciones",
+    reconciliation: "Conciliación", reports: "Informe ejecutivo", settings: "Configuración",
+    integrations: "Centro de Integraciones",
+  })) {
     await page.goto(`/${route}`);
-    await expect(page.locator("main h1")).toBeVisible();
+    await expect(page.locator("main h1")).toHaveText(title);
     await expect(
       page.getByText("Unexpected Application Error!", { exact: true }),
     ).toHaveCount(0);
@@ -516,7 +509,7 @@ test("dashboard filters survive reload and financial breakdown opens on mobile",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dashboard");
   await expect(
-    page.getByRole("heading", { name: "Resumen de caja" }),
+    page.getByRole("heading", { name: "Resumen", exact: true }),
   ).toBeVisible();
   await page.getByLabel("Horizonte").selectOption("7");
   await page.reload();

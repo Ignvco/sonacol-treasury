@@ -27,6 +27,14 @@ project-root/
 
 ## Directory Responsibilities
 
+- **tests/treasury-work-protection.test.ts**: Installed-version upgrade, safe removal, carry, full audit evidence, frozen history, native defaults and authorization in an isolated database.
+- **tests/investment-maturities.test.ts**: Explicit dates, timezone, source multiplicity, native currency and absence of invented remaining capital.
+- **tests/browser/treasury-stabilization.spec.ts**: Real SQL deletion protection and explicit BIFF maturity dates in desktop/mobile UI; old server contracts fail closed.
+
+- **supabase/migrations/20261025034359_protect_treasury_work.sql**: Transactional deletion guard for exclusive planning and histories; full future before/after manual evidence without data repair.
+- **src/financial-engine/investment-maturities.ts**: Explicit dates at the selected cutoff, original currency and no automatic cash events.
+- **src/components/treasury/InvestmentCalendar.tsx**: Source-backed calendar shared by Investments and its detail dialog.
+
 - **supabase/migrations/20261014000000000_monthly_incremental_erp.sql**: Monthly opening validation and append-only banking import identities with audited results; retains historical source rows and operational relationships.
 - **src/pages/importations/ErpIncrementalSummary.tsx**: Server-confirmed import counts, retained postings, blocking differences and monthly account controls in preview and results.
 - **tests/erp-monthly-incremental.test.ts**: Monthly date contract, banking idempotence, partial updates, source ambiguity, reconciliation/execution preservation, rollback and BIFF maturity regressions.

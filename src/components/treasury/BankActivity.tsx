@@ -30,7 +30,7 @@ export function BankActivity({ activity, formatAmount }: { activity: BankActivit
         <span className="mt-1 block text-xs text-muted-foreground">{c.rows.length} filas · Ver origen</span>
       </button>)}
     </div>
-    <p className="text-xs text-muted-foreground">Saldo inicial + cargos − abonos = saldo al corte. Estos movimientos ya están incluidos en la caja disponible. La proyección comienza al día siguiente y utiliza los cobros y pagos programados.</p>
+    <p className="text-xs text-muted-foreground">Saldo inicial + cargos − abonos = saldo al corte. Movimientos incluidos en la caja disponible. <Link to="/help#flujo" className="underline">Criterio de proyección</Link></p>
     {a.periodIssue ? <p role="alert" className="text-xs text-warning">{a.periodIssue}</p> : <details>
       <summary className="cursor-pointer text-sm font-medium text-brand">Ver flujo bancario diario</summary>
       <div className="mt-3 min-w-0"><DataTable data={a.daily} rowKey={d => d.date} pageSize={10} defaultSort={{ key: "date", dir: "asc" }} columns={[

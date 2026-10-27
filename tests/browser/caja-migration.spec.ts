@@ -37,7 +37,10 @@ test("CAJA review, formula adoption and daily comparison work with retained sour
     await page.goto("/changes");
     await page.getByText("Control histórico de la migración (opcional)", { exact: true }).click();
     await page.getByRole("combobox", { name: "Carga CAJA de referencia", exact: true }).selectOption(legacy);
-    await expect(page.getByText(/Coincidencia numérica en este corte y moneda/)).toBeVisible();
+    await expect(page.getByText(/Diferencia de caja inicial:.*0 CLP.*Máxima diferencia de saldo:.*0 CLP.*Requiere revisión/)).toBeVisible();
+    await expect(page.getByText("Revisiones pendientes (2)", { exact: true })).toBeVisible();
+    await expect(page.getByText("Movimientos que explican diferencias (4)", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Coincidencia numérica en este corte y moneda/)).toHaveCount(0);
     await page.screenshot({ path: "test-results/caja-migration-desktop.png", fullPage: true, animations: "disabled" });
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();

@@ -37,12 +37,19 @@ test("all current modules render at desktop and phone widths with ERP data", asy
     await importErp(db, "ERP-ui-fixture.xlsx", processWorkbook(await parseWorkbook(workbookBytes()), undefined, erpContext).records);
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    const routes = ["today", "dashboard", "cashflow", "banks", "receivables", "investments", "projections", "planning", "reconciliation", "changes", "scenarios", "accuracy", "assistant", "reports", "importations", "integrations", "security", "settings", "help"];
+    const routes = {
+      today: "Hoy", dashboard: "Resumen", cashflow: "Flujo de caja", banks: "Saldos bancarios",
+      receivables: "Cobranzas", investments: "Inversiones", projections: "Proyecciones",
+      planning: "Planificación y reglas", reconciliation: "Conciliación", changes: "Explicar cambios",
+      scenarios: "Laboratorio de caja", accuracy: "Precisión de las previsiones",
+      assistant: "Asistente de tesorería", reports: "Informe ejecutivo", importations: "Importaciones",
+      integrations: "Centro de Integraciones", security: "Seguridad y control", settings: "Configuración", help: "Guía de usuario",
+    };
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-      for (const route of routes) {
+      for (const [route, title] of Object.entries(routes)) {
         await page.goto(`/${route}`);
-        await expect(page.locator("main h1"), `${route} at ${width}px`).toBeVisible();
+        await expect(page.locator("main h1"), `${route} at ${width}px`).toHaveText(title);
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), `${route} document overflow at ${width}px`).toBeLessThanOrEqual(1);
         expect(await page.locator("main").evaluate(element => element.scrollWidth - element.clientWidth), `${route} main overflow at ${width}px`).toBeLessThanOrEqual(1);
         if (["dashboard", "help", "planning"].includes(route) && width !== 320) {

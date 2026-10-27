@@ -118,13 +118,12 @@ export default function Today() {
       </div>
       {!bundle.batch && (
         <div className="rounded-2xl border border-brand/20 bg-brand-soft p-6">
-          <h2 className="font-semibold">Tu tesorería comienza con BASE</h2>
+          <h2 className="font-semibold">Importa tu primera ERP</h2>
           <p className="my-2 text-sm">
-            Carga tu Excel para construir la posición de caja y los próximos
-            compromisos.
+            Revisa los saldos y configura tus compromisos en la plataforma.
           </p>
           <Link className="t-button-primary" to="/importations">
-            Importar BASE
+            Importar ERP
           </Link>
         </div>
       )}

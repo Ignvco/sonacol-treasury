@@ -151,7 +151,7 @@ export default function Projections() {
       />
       {!bundle.batch && (
         <p className="rounded-xl border p-4 text-sm">
-          Carga tu primera BASE en Importaciones para comenzar.
+          Importa tu primera ERP para comenzar a planificar.
         </p>
       )}
       <SectionCard
