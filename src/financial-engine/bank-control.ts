@@ -1,17 +1,25 @@
 /** Raw ERP bank contract: Cargo increases cash, Abono decreases cash. Categories never determine the sign. */
+import { toMinorUnits, toSafeDisplayNumber, minorUnitsToDecimal, type MinorUnits } from "./financial-contract-core";
+
 export const isErpBank = (n: Record<string, unknown>) => n.sourceProfile === "ERP-RAW-v1" && ["bank_opening", "bank_movement"].includes(String(n.recordRole));
-const cents = (value: unknown) => {
-  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * 100))) throw new Error("Importe bancario inválido.");
-  return Math.round(value * 100);
+const cents = (value: unknown): MinorUnits => {
+  if (typeof value !== "number" && typeof value !== "string") throw new Error("Importe bancario inválido.");
+  try {
+    const units = toMinorUnits(value);
+    // The current presentation layer exposes numbers. Never silently convert
+    // values whose minor units cannot be represented as a safe JS integer.
+    toSafeDisplayNumber(units);
+    return units;
+  } catch { throw new Error("Importe bancario inválido: requiere centavos exactos y rango seguro."); }
 };
 export function erpBankSigned(n: Record<string, unknown>) {
   const signed = cents(n.signedAmount), amount = cents(n.amount);
   if (n.recordRole === "bank_movement") {
     const debit = cents(n.debe), credit = cents(n.haber);
-    if (debit < 0 || credit < 0 || (debit > 0 && credit > 0) || signed !== debit - credit) throw new Error("El movimiento bancario no coincide con Cargo menos Abono.");
+    if (debit < 0n || credit < 0n || (debit > 0n && credit > 0n) || signed !== debit - credit) throw new Error("El movimiento bancario no coincide con Cargo menos Abono.");
   }
-  if (Math.abs(signed) !== amount || n.type !== (signed < 0 ? "expense" : "income")) throw new Error("Ingreso/egreso bancario incompatible con su importe con signo.");
-  return signed / 100;
+  if ((signed < 0n ? -signed : signed) !== amount || n.type !== (signed < 0n ? "expense" : "income")) throw new Error("Ingreso/egreso bancario incompatible con su importe con signo.");
+  return toSafeDisplayNumber(signed);
 }
 export interface BankControlInput { normalized: Record<string, unknown>; row?: number | null; sheet?: string; status?: string; warnings?: string; }
 export interface BankControl {
@@ -29,7 +37,7 @@ export function bankControls(records: BankControlInput[]): BankControl[] {
   }
   return [...grouped].map(([key, items]) => {
     const n = items[0].normalized, issues: string[] = [], openings = items.filter(r => r.normalized.recordRole === "bank_opening");
-    let opening = 0, income = 0, expense = 0, reported: number | null = null;
+    let opening = 0n, income = 0n, expense = 0n, reported: MinorUnits | null = null;
     for (const item of items) {
       const value = item.normalized;
       if (item.status === "ERROR") issues.push(item.warnings || "Fila bancaria inválida.");
@@ -44,11 +52,12 @@ export function bankControls(records: BankControlInput[]): BankControl[] {
     if (openings.length !== 1) issues.push(`Cuenta ${n.ledgerCode}: se requiere un único saldo inicial; se encontraron ${openings.length}.`);
     if (new Set(items.map(r => r.normalized.periodStart)).size > 1 || new Set(items.map(r => r.normalized.cutoffDate)).size > 1) issues.push("Los saldos y movimientos tienen períodos distintos.");
     const calculated = opening + income - expense, difference = reported === null ? null : calculated - reported;
-    if (![opening, income, expense, calculated].every(Number.isSafeInteger)) issues.push("Acumulado bancario fuera del rango seguro.");
-    if (difference !== null && difference !== 0) issues.push(`Cuenta ${n.ledgerCode}: saldo calculado ${calculated / 100}, informado ${reported! / 100}, diferencia ${difference / 100}.`);
+    // Refuse to display unsafe totals instead of rounding financial evidence.
+    for (const amount of [opening, income, expense, calculated, ...(reported === null ? [] : [reported, difference!])]) toSafeDisplayNumber(amount);
+    if (difference !== null && difference !== 0n) issues.push(`Cuenta ${n.ledgerCode}: saldo calculado ${minorUnitsToDecimal(calculated)}, informado ${minorUnitsToDecimal(reported!)}, diferencia ${minorUnitsToDecimal(difference)}.`);
     return { key, bank: String(openings[0]?.normalized.bank ?? n.bank ?? "Sin banco"), ledger: String(n.ledgerCode ?? ""), currency: String(n.currency ?? ""),
-      periodStart: String(n.periodStart ?? ""), cutoff: String(n.cutoffDate ?? ""), opening: opening / 100, income: income / 100, expense: expense / 100,
-      calculated: calculated / 100, reported: reported === null ? null : reported / 100, difference: difference === null ? null : difference / 100,
+      periodStart: String(n.periodStart ?? ""), cutoff: String(n.cutoffDate ?? ""), opening: toSafeDisplayNumber(opening), income: toSafeDisplayNumber(income), expense: toSafeDisplayNumber(expense),
+      calculated: toSafeDisplayNumber(calculated), reported: reported === null ? null : toSafeDisplayNumber(reported), difference: difference === null ? null : toSafeDisplayNumber(difference),
       movements: items.length - openings.length, issues: [...new Set(issues)], references: items.map(r => `${r.sheet ?? r.normalized.sourceSheet}!${r.row ?? ""}`) };
   }).sort((a, b) => a.ledger.localeCompare(b.ledger) || a.currency.localeCompare(b.currency));
 }
