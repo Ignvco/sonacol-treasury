@@ -1,6 +1,7 @@
 /** Raw ERP bank contract: Cargo increases cash, Abono decreases cash. Categories never determine the sign. */
 import { toMinorUnits, toSafeDisplayNumber, minorUnitsToDecimal, type MinorUnits } from "./financial-contract-core";
 import { resolveBankAccount, type VerifiedBankAccountBinding, type BankAccountResolution } from "./bank-account-identity";
+import { resolvePublicBankAccount, type PublicBankAccountBinding } from "./bank-catalog-public";
 
 export const isErpBank = (n: Record<string, unknown>) => n.sourceProfile === "ERP-RAW-v1" && ["bank_opening", "bank_movement"].includes(String(n.recordRole));
 const cents = (value: unknown): MinorUnits => {
@@ -30,7 +31,7 @@ export interface BankControl {
   movements: number; issues: string[]; references: string[];
 }
 /** Independent per-account reconciliation in cents; absent reported balances stay unknown. */
-export function bankControls(records: BankControlInput[], bindings: readonly VerifiedBankAccountBinding[] = []): BankControl[] {
+export function bankControls(records: BankControlInput[], bindings: readonly VerifiedBankAccountBinding[] = [], catalog: readonly PublicBankAccountBinding[] = []): BankControl[] {
   const grouped = new Map<string, BankControlInput[]>();
   for (const record of records.filter(r => isErpBank(r.normalized))) {
     const n = record.normalized, key = JSON.stringify([n.company, n.ledgerCode, n.currency]);
@@ -63,7 +64,8 @@ export function bankControls(records: BankControlInput[], bindings: readonly Ver
     if (difference !== null && difference !== 0n) issues.push(`Cuenta ${n.ledgerCode}: saldo calculado ${minorUnitsToDecimal(calculated)}, informado ${minorUnitsToDecimal(reported!)}, diferencia ${minorUnitsToDecimal(difference)}.`);
     const bank = String(openings[0]?.normalized.bank ?? n.bank ?? "Sin banco");
     const company = String(n.company ?? "");
-    const bankAccount = resolveBankAccount({ company, ledger: String(n.ledgerCode ?? ""), currency: String(n.currency ?? ""), bank }, bindings);
+    const identity = { company, ledger: String(n.ledgerCode ?? ""), currency: String(n.currency ?? ""), bank };
+    const bankAccount = catalog.length ? resolvePublicBankAccount(identity, catalog) : resolveBankAccount(identity, bindings);
     if (bankAccount.state === "bank_mismatch") issues.push(bankAccount.issue);
     return { key, company, bank, bankAccount, ledger: String(n.ledgerCode ?? ""), currency: String(n.currency ?? ""),
       periodStart: String(n.periodStart ?? ""), cutoff: String(n.cutoffDate ?? ""), opening: toSafeDisplayNumber(opening), income: toSafeDisplayNumber(income), expense: toSafeDisplayNumber(expense),
